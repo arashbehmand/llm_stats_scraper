@@ -86,6 +86,16 @@ def main():
         # Check if rank changes are significant enough to report
         # Logic is inside generate_report but we can check here too
         has_changes = True
+    
+    # Special case: If any source had empty previous state but now has data,
+    # we should update state even if reporting fails to prevent infinite loops
+    has_empty_to_nonempty_transition = False
+    for source_name, current_list in current_state.items():
+        prev_list = previous_state.get(source_name, [])
+        if not prev_list and current_list:
+            has_empty_to_nonempty_transition = True
+            logging.info(f"Source '{source_name}' transitioned from empty to {len(current_list)} items")
+            break
 
     if has_changes:
         logging.info(f"Changes detected: {len(diff_report['new_entries'])} new models, {len(diff_report['rank_changes'])} rank changes.")
@@ -95,12 +105,6 @@ def main():
         # Pass current_state to generate_report to provide context
         report_text = generate_report(diff_report, current_state)
 
-        # IMPORTANT: Always update state when changes are detected to prevent infinite loops
-        # This fixes the issue where empty previous states don't get overwritten
-        with open(STATE_FILE, "w") as f:
-            json.dump(current_state, f, indent=2)
-        logging.info("State updated with current data.")
-
         if report_text:
             logging.info(f"Generated Report: {report_text}...")
 
@@ -109,10 +113,24 @@ def main():
 
             if success:
                 logging.info("Report published successfully.")
+                # 7. Update State (ONLY on success)
+                with open(STATE_FILE, "w") as f:
+                    json.dump(current_state, f, indent=2)
+                logging.info("State updated.")
             else:
-                logging.error("Failed to publish report. State was already updated (will not retry same changes).")
+                logging.error("Failed to publish report. State NOT updated (will retry next run).")
+                
+                # Special case: If we had empty-to-nonempty transition, update state anyway
+                # to prevent infinite loops when reporting fails
+                if has_empty_to_nonempty_transition:
+                    logging.warning("Updating state anyway due to empty-to-nonempty transition (prevents infinite loop).")
+                    with open(STATE_FILE, "w") as f:
+                        json.dump(current_state, f, indent=2)
         else:
-            logging.info("Changes detected but report generation failed or returned empty. State was already updated.")
+            logging.info("Changes detected but deemed insignificant by reporter.")
+            # Still update state? Yes, otherwise we'll keep detecting these minor changes.
+            with open(STATE_FILE, "w") as f:
+                json.dump(current_state, f, indent=2)
 
     else:
         logging.info("No significant changes detected.")

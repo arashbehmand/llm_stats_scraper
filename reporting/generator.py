@@ -75,6 +75,11 @@ def generate_report(diff_report, current_state=None):
 
     try:
         report = chain.invoke({"context": csv_context, "changes": json_changes})
+        
+        # Post-processing (length check only)
+        if len(report) > 4000:
+            report = report[:4000] + "...\n(Report truncated)"
+        
         logging.info("Reporting: Generated update.")
         return report
     except Exception as e:

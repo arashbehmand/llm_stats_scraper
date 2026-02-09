@@ -1,5 +1,6 @@
 _old/
 state/last_run.json
+.claude
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

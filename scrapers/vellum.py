@@ -69,9 +69,15 @@ def scrape_vellum():
             first_y = next((y for y in y_vals if y is not None), None)
 
             score = 0.0
+            extracted_metrics = {}
 
             # Check if xValues are strings (Metrics)
             if isinstance(first_x, str):
+                # Extract all metrics
+                for i, name in enumerate(x_vals):
+                    if name and i < len(y_vals) and isinstance(y_vals[i], (int, float)):
+                        extracted_metrics[name] = y_vals[i]
+
                 # Try to find Elo/Win Rate in xValues, get yValues
                 # Prioritize: "Elo", "Win Rate", "Average", "Overall"
                 val = find_score(x_vals, y_vals, ["elo", "win rate", "average", "overall"])
@@ -87,14 +93,19 @@ def scrape_vellum():
 
             # Maybe swapped? yValues are strings?
             elif isinstance(first_y, str):
-                 val = find_score(y_vals, x_vals, ["elo", "win rate", "average", "overall"])
-                 if val is not None:
-                     score = val
-                 else:
-                     for v in x_vals:
-                         if isinstance(v, (int, float)):
-                             score = v
-                             break
+                # Extract all metrics
+                for i, name in enumerate(y_vals):
+                    if name and i < len(x_vals) and isinstance(x_vals[i], (int, float)):
+                        extracted_metrics[name] = x_vals[i]
+
+                val = find_score(y_vals, x_vals, ["elo", "win rate", "average", "overall"])
+                if val is not None:
+                    score = val
+                else:
+                    for v in x_vals:
+                        if isinstance(v, (int, float)):
+                            score = v
+                            break
 
             # Ensure score is float
             try:
@@ -106,7 +117,10 @@ def scrape_vellum():
                 "model": model_name,
                 "score": score,
                 "source": "vellum",
-                "details": {"raw_score": score}
+                "details": {
+                    "raw_score": score,
+                    "metrics": extracted_metrics
+                }
             })
 
         # Sort by score descending

@@ -58,6 +58,7 @@ class DiffEngine:
                     "model": model,
                     "rank": rank,
                     "score": item['score'],
+                    "details": item.get('details', {}),
                     "context": context
                 })
                 self.report['summary'].append(f"[{source}] NEW: {model} at #{rank}")
@@ -79,6 +80,7 @@ class DiffEngine:
                             "old_rank": prev_rank,
                             "new_rank": rank,
                             "score": item.get('score'),
+                            "details": item.get('details', {}),
                             "change": diff,
                             "context": f"{direction} {abs(diff)} spots (was #{prev_rank}, now #{rank})"
                         })
