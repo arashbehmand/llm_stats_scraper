@@ -35,6 +35,9 @@ def main():
     logging.info("Scraping LLMStats...")
     llmstats = scrape_llmstats()
 
+    logging.info("Scraping OpenRouter...")
+    openrouter = scrape_openrouter()
+
     # 2. Prepare Current State
     current_state = {
         "arena_text": arena_text,
@@ -43,6 +46,7 @@ def main():
         "vellum": vellum,
         "artificial_analysis": artificial,
         "llmstats": llmstats,
+        "openrouter": openrouter,
     }
 
     # 3. Load Previous State
@@ -91,6 +95,12 @@ def main():
         # Pass current_state to generate_report to provide context
         report_text = generate_report(diff_report, current_state)
 
+        # IMPORTANT: Always update state when changes are detected to prevent infinite loops
+        # This fixes the issue where empty previous states don't get overwritten
+        with open(STATE_FILE, "w") as f:
+            json.dump(current_state, f, indent=2)
+        logging.info("State updated with current data.")
+
         if report_text:
             logging.info(f"Generated Report: {report_text}...")
 
@@ -99,17 +109,10 @@ def main():
 
             if success:
                 logging.info("Report published successfully.")
-                # 7. Update State (ONLY on success)
-                with open(STATE_FILE, "w") as f:
-                    json.dump(current_state, f, indent=2)
-                logging.info("State updated.")
             else:
-                logging.error("Failed to publish report. State NOT updated (will retry next run).")
+                logging.error("Failed to publish report. State was already updated (will not retry same changes).")
         else:
-            logging.info("Changes detected but deemed insignificant by reporter.")
-            # Still update state? Yes, otherwise we'll keep detecting these minor changes.
-            with open(STATE_FILE, "w") as f:
-                json.dump(current_state, f, indent=2)
+            logging.info("Changes detected but report generation failed or returned empty. State was already updated.")
 
     else:
         logging.info("No significant changes detected.")

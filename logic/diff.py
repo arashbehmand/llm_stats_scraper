@@ -78,6 +78,7 @@ class DiffEngine:
                             "model": model,
                             "old_rank": prev_rank,
                             "new_rank": rank,
+                            "score": item.get('score'),
                             "change": diff,
                             "context": f"{direction} {abs(diff)} spots (was #{prev_rank}, now #{rank})"
                         })
@@ -86,8 +87,8 @@ class DiffEngine:
                 # 3. Detect Score Spikes (e.g. +20 Elo)
                 # Ensure scores are floats
                 try:
-                    curr_score = float(item['score'])
-                    prev_score = float(prev_item['score'])
+                    curr_score = float(item.get('score', 0))
+                    prev_score = float(prev_item.get('score', 0))
                     score_diff = curr_score - prev_score
 
                     # Threshold depends on scale.

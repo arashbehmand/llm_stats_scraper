@@ -23,3 +23,4 @@ Your task is to write a "Breaking News" update based on the provided data.
 - If a model climbs/drops, mention the movement magnitude.
 - **CRITICAL**: Do not hallucinate. If the data isn't there, don't invent it.
 - Keep the total report under 250 words.
+- If many changes occur in one source, summarize them instead of listing every single one.

@@ -1,0 +1,12 @@
+services:
+  llm-bot:
+    build: .
+    container_name: llm-bot
+    volumes:
+      - ./state:/app/state
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Run the script, sleep for 1 hour (3600s), and repeat.
+    # We use sh -c to allow the loop structure.
+    command: sh -c "while true; do echo 'Starting run...'; python main.py; echo 'Run complete. Sleeping for 1 hour...'; sleep 3600; done"

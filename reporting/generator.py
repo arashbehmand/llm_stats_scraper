@@ -27,20 +27,29 @@ def generate_report(diff_report, current_state=None):
         system_prompt = "You are an AI News Anchor. Report these changes: {changes}"
 
     # Prepare Context (Top 5 models per source)
-    context_lines = ["Source,Rank,Model,Score"]
+    context_lines = []
     if current_state:
         for source, models in current_state.items():
             # Ensure models is a list
             if not isinstance(models, list): continue
 
-            # Sort by rank (should be already sorted, but safety first)
             # Filter out None/empty
             valid_models = [m for m in models if isinstance(m, dict)]
+
+            if not valid_models: continue
+
+            # Add Header for this Source
+            context_lines.append(f"\nSource: {source.upper()}")
+            context_lines.append("Rank,Model,Score")
 
             # Take top 5
             for m in valid_models[:5]:
                 try:
-                    line = f"{source},{m.get('rank')},{m.get('model')},{m.get('score')}"
+                    score = m.get('score', 0)
+                    if isinstance(score, float):
+                         score = f"{score:.2f}"
+
+                    line = f"{m.get('rank')},{m.get('model')},{score}"
                     context_lines.append(line)
                 except:
                     continue
@@ -58,7 +67,7 @@ def generate_report(diff_report, current_state=None):
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        ("user", "CONTEXT (CSV):\n{context}\n\nCHANGES (JSON):\n{changes}")
+        ("user", "CONTEXT (CSV):\n```csv\n{context}\n```\n\nCHANGES (JSON):\n```json\n{changes}\n```")
     ])
 
     llm = ChatOpenAI(model="gpt-4o") # Updated to a known model, user said gpt-5-mini in prev code which might be a placeholder or typo

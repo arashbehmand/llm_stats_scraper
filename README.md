@@ -65,11 +65,33 @@ docker build -t llm-bot .
 docker run --env-file .env -v $(pwd)/state:/app/state llm-bot
 ```
 
+### Docker Compose (Recommended)
+Use Docker Compose to run the bot as a background service that checks for updates every hour.
+
+1. Ensure `.env` is configured.
+2. Run:
+   ```bash
+   docker compose up -d
+   ```
+   This will build the image and start the container in a loop (interval: 1 hour).
+   Logs can be viewed with:
+   ```bash
+   docker compose logs -f
+   ```
+
 ### Automation
-To run hourly, add to your crontab:
+To run hourly via cron (alternative to Docker Compose):
 ```bash
 0 * * * * cd /path/to/llm_stats_scraper && /usr/bin/python3 main.py >> /var/log/llm_bot.log 2>&1
 ```
+
+## Customization
+
+### Reporting Prompt
+You can customize the style and persona of the news reports by editing `reporting/prompt.txt`. This file contains the system prompt used by the AI News Anchor.
+
+### Thresholds
+Adjust `logic/diff.py` to change sensitivity for rank/score changes (e.g., minimum rank jump to report).
 
 ## Project Structure
 
