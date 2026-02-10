@@ -1,14 +1,18 @@
-import requests
 import json
 import logging
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import requests
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 URL = "https://artificialanalysis.ai/leaderboards/models"
 HEADERS = {
     "RSC": "1",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 }
+
 
 def find_leaderboard_data(obj):
     """
@@ -21,12 +25,15 @@ def find_leaderboard_data(obj):
             return obj
         for item in obj:
             res = find_leaderboard_data(item)
-            if res: return res
+            if res:
+                return res
     elif isinstance(obj, dict):
         for key, value in obj.items():
             res = find_leaderboard_data(value)
-            if res: return res
+            if res:
+                return res
     return None
+
 
 def scrape_artificial_analysis():
     """
@@ -42,21 +49,22 @@ def scrape_artificial_analysis():
         logging.error(f"Artificial Analysis: Network error: {e}")
         return []
 
-    lines = response.text.split('\n')
+    lines = response.text.split("\n")
     all_data = []
 
     for line in lines:
         if "intelligence_index" in line:
             try:
                 parts = line.split(":", 1)
-                if len(parts) < 2: continue
+                if len(parts) < 2:
+                    continue
 
                 payload = parts[1].strip()
                 if payload.startswith("I"):
                     payload = payload[1:]
 
                 if not (payload.startswith("[") or payload.startswith("{")):
-                     continue
+                    continue
 
                 try:
                     data = json.loads(payload)
@@ -90,15 +98,20 @@ def scrape_artificial_analysis():
     valid_entries.sort(key=lambda x: x[1], reverse=True)
 
     for rank, (entry, score) in enumerate(valid_entries, 1):
-        normalized.append({
-            "model": entry.get("name", "Unknown"), # Assuming 'name' field exists, fallback required if different
-            "rank": rank,
-            "score": score,
-            "source": "artificial_analysis",
-            "details": entry
-        })
+        normalized.append(
+            {
+                "model": entry.get(
+                    "name", "Unknown"
+                ),  # Assuming 'name' field exists, fallback required if different
+                "rank": rank,
+                "score": score,
+                "source": "artificial_analysis",
+                "details": entry,
+            }
+        )
 
     return normalized
+
 
 if __name__ == "__main__":
     data = scrape_artificial_analysis()

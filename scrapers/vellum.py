@@ -1,9 +1,13 @@
-import requests
-import re
 import json
 import logging
+import re
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import requests
+
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 
 def scrape_vellum():
     """
@@ -24,7 +28,7 @@ def scrape_vellum():
         logging.error(f"Vellum: Network error: {e}")
         return []
 
-    pattern = re.compile(r'var dataModels\s*=\s*({.*?});', re.DOTALL)
+    pattern = re.compile(r"var dataModels\s*=\s*({.*?});", re.DOTALL)
     match = pattern.search(html_content)
 
     if not match:
@@ -32,10 +36,10 @@ def scrape_vellum():
         return []
 
     json_text = match.group(1)
-    json_text = re.sub(r'\bxValues\s*:', '"xValues":', json_text)
-    json_text = re.sub(r'\byValues\s*:', '"yValues":', json_text)
-    json_text = re.sub(r',\s*}', '}', json_text)
-    json_text = re.sub(r',\s*]', ']', json_text)
+    json_text = re.sub(r"\bxValues\s*:", '"xValues":', json_text)
+    json_text = re.sub(r"\byValues\s*:", '"yValues":', json_text)
+    json_text = re.sub(r",\s*}", "}", json_text)
+    json_text = re.sub(r",\s*]", "]", json_text)
 
     try:
         data = json.loads(json_text)
@@ -45,12 +49,14 @@ def scrape_vellum():
 
         # Iterate through all keys (models)
         for model_name, metrics_data in data.items():
-            if not isinstance(metrics_data, dict): continue
+            if not isinstance(metrics_data, dict):
+                continue
 
-            x_vals = metrics_data.get('xValues', [])
-            y_vals = metrics_data.get('yValues', [])
+            x_vals = metrics_data.get("xValues", [])
+            y_vals = metrics_data.get("yValues", [])
 
-            if not x_vals or not y_vals: continue
+            if not x_vals or not y_vals:
+                continue
 
             # Determine which axis is metric names vs scores
             # Heuristic: Metric names are strings, scores are numbers
@@ -80,7 +86,9 @@ def scrape_vellum():
 
                 # Try to find Elo/Win Rate in xValues, get yValues
                 # Prioritize: "Elo", "Win Rate", "Average", "Overall"
-                val = find_score(x_vals, y_vals, ["elo", "win rate", "average", "overall"])
+                val = find_score(
+                    x_vals, y_vals, ["elo", "win rate", "average", "overall"]
+                )
                 if val is not None:
                     score = val
                 else:
@@ -98,7 +106,9 @@ def scrape_vellum():
                     if name and i < len(x_vals) and isinstance(x_vals[i], (int, float)):
                         extracted_metrics[name] = x_vals[i]
 
-                val = find_score(y_vals, x_vals, ["elo", "win rate", "average", "overall"])
+                val = find_score(
+                    y_vals, x_vals, ["elo", "win rate", "average", "overall"]
+                )
                 if val is not None:
                     score = val
                 else:
@@ -113,22 +123,21 @@ def scrape_vellum():
             except:
                 score = 0.0
 
-            normalized.append({
-                "model": model_name,
-                "score": score,
-                "source": "vellum",
-                "details": {
-                    "raw_score": score,
-                    "metrics": extracted_metrics
+            normalized.append(
+                {
+                    "model": model_name,
+                    "score": score,
+                    "source": "vellum",
+                    "details": {"raw_score": score, "metrics": extracted_metrics},
                 }
-            })
+            )
 
         # Sort by score descending
-        normalized.sort(key=lambda x: x['score'], reverse=True)
+        normalized.sort(key=lambda x: x["score"], reverse=True)
 
         # Add ranks
         for i, item in enumerate(normalized, 1):
-            item['rank'] = i
+            item["rank"] = i
 
         logging.info(f"Vellum: Parsed {len(normalized)} models.")
         return normalized
@@ -136,6 +145,7 @@ def scrape_vellum():
     except json.JSONDecodeError as e:
         logging.error(f"Vellum: JSON Parse Error: {e}")
         return []
+
 
 if __name__ == "__main__":
     data = scrape_vellum()

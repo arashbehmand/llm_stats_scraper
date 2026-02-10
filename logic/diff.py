@@ -1,5 +1,5 @@
 import logging
-import json
+
 
 class DiffEngine:
     def __init__(self, current_state, previous_state):
@@ -9,7 +9,7 @@ class DiffEngine:
             "summary": [],
             "new_entries": [],
             "rank_changes": [],
-            "score_changes": []
+            "score_changes": [],
         }
 
     def run(self):
@@ -31,19 +31,20 @@ class DiffEngine:
         Analyzes a single source (e.g. 'arena_text') for changes.
         """
         # Create lookups
-        prev_map = {item['model']: item for item in prev_list}
-        curr_map = {item['model']: item for item in current_list}
+        prev_map = {item["model"]: item for item in prev_list}
+        {item["model"]: item for item in current_list}
 
         # 1. Detect New Entries (in Top 20)
         for i, item in enumerate(current_list):
-            rank = item['rank']
-            model = item['model']
+            rank = item["rank"]
+            model = item["model"]
 
             # Skip invalid model names
-            if not model or str(model).lower() in ['none', 'unknown', 'null']:
+            if not model or str(model).lower() in ["none", "unknown", "null"]:
                 continue
 
-            if rank > 20: continue # Ignore noise below top 20
+            if rank > 20:
+                continue  # Ignore noise below top 20
 
             if model not in prev_map:
                 # NEW ENTRY!
@@ -53,55 +54,65 @@ class DiffEngine:
                 if displaced:
                     context += f", likely pushing {displaced} down."
 
-                self.report['new_entries'].append({
-                    "source": source,
-                    "model": model,
-                    "rank": rank,
-                    "score": item['score'],
-                    "details": item.get('details', {}),
-                    "context": context
-                })
-                self.report['summary'].append(f"[{source}] NEW: {model} at #{rank}")
+                self.report["new_entries"].append(
+                    {
+                        "source": source,
+                        "model": model,
+                        "rank": rank,
+                        "score": item["score"],
+                        "details": item.get("details", {}),
+                        "context": context,
+                    }
+                )
+                self.report["summary"].append(f"[{source}] NEW: {model} at #{rank}")
 
             else:
                 # 2. Detect Rank Changes
                 prev_item = prev_map[model]
-                prev_rank = prev_item['rank']
+                prev_rank = prev_item["rank"]
 
                 if rank != prev_rank:
-                    diff = prev_rank - rank # Positive = Improvement (e.g. 5 -> 3, diff=2)
+                    diff = (
+                        prev_rank - rank
+                    )  # Positive = Improvement (e.g. 5 -> 3, diff=2)
 
                     # Filter noise: only report changes > 1 spot OR changes within Top 5
                     if abs(diff) >= 2 or (rank <= 5 or prev_rank <= 5):
                         direction = "CLIMBED" if diff > 0 else "DROPPED"
-                        self.report['rank_changes'].append({
-                            "source": source,
-                            "model": model,
-                            "old_rank": prev_rank,
-                            "new_rank": rank,
-                            "score": item.get('score'),
-                            "details": item.get('details', {}),
-                            "change": diff,
-                            "context": f"{direction} {abs(diff)} spots (was #{prev_rank}, now #{rank})"
-                        })
-                        self.report['summary'].append(f"[{source}] {model} {direction} to #{rank} (was #{prev_rank})")
+                        self.report["rank_changes"].append(
+                            {
+                                "source": source,
+                                "model": model,
+                                "old_rank": prev_rank,
+                                "new_rank": rank,
+                                "score": item.get("score"),
+                                "details": item.get("details", {}),
+                                "change": diff,
+                                "context": f"{direction} {abs(diff)} spots (was #{prev_rank}, now #{rank})",
+                            }
+                        )
+                        self.report["summary"].append(
+                            f"[{source}] {model} {direction} to #{rank} (was #{prev_rank})"
+                        )
 
                 # 3. Detect Score Spikes (e.g. +20 Elo)
                 # Ensure scores are floats
                 try:
-                    curr_score = float(item.get('score', 0))
-                    prev_score = float(prev_item.get('score', 0))
+                    curr_score = float(item.get("score", 0))
+                    prev_score = float(prev_item.get("score", 0))
                     score_diff = curr_score - prev_score
 
                     threshold = self._score_change_threshold(source)
                     if abs(score_diff) >= threshold:
-                         self.report['score_changes'].append({
-                            "source": source,
-                            "model": model,
-                            "old_score": prev_score,
-                            "new_score": curr_score,
-                            "diff": score_diff
-                        })
+                        self.report["score_changes"].append(
+                            {
+                                "source": source,
+                                "model": model,
+                                "old_score": prev_score,
+                                "new_score": curr_score,
+                                "diff": score_diff,
+                            }
+                        )
                 except (ValueError, TypeError):
                     pass
 
@@ -126,9 +137,10 @@ class DiffEngine:
         Finds which model was at this rank in the previous list.
         """
         for item in prev_list:
-            if item['rank'] == rank:
-                return item['model']
+            if item["rank"] == rank:
+                return item["model"]
         return None
+
 
 def run_diff(current, previous):
     engine = DiffEngine(current, previous)

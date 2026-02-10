@@ -1,7 +1,7 @@
+import inspect
 import logging
 import os
 from functools import lru_cache
-import inspect
 
 
 def _to_bool(value):
@@ -73,7 +73,9 @@ def initialize_langfuse():
     os.environ["LANGFUSE_PUBLIC_KEY"] = public_key
     os.environ["LANGFUSE_SECRET_KEY"] = secret_key
 
-    litellm.callbacks = _append_callback(getattr(litellm, "callbacks", None), "langfuse")
+    litellm.callbacks = _append_callback(
+        getattr(litellm, "callbacks", None), "langfuse"
+    )
     litellm.success_callback = _append_callback(
         getattr(litellm, "success_callback", None), "langfuse"
     )

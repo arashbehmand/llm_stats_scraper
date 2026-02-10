@@ -1,9 +1,8 @@
-import telebot
-import os
 import logging
-import re
+import os
 import time
 
+import telebot
 
 MDV2_RESERVED_CHARS = r"_*[]()~`>#+-=|{}.!"
 
@@ -29,7 +28,6 @@ def _send_with_retries(bot, chat_id, text, parse_mode=None, retries=3, delay_sec
 
 
 def send_telegram_message(message):
-
     """
     Sends a message to a Telegram channel/chat using pyTelegramBotAPI.
     Expects TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in environment variables.

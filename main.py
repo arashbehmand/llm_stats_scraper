@@ -1,20 +1,25 @@
 import json
-import os
 import logging
+import os
+
 from dotenv import load_dotenv
+
+from bot.sender import send_telegram_message
+from logic.diff import run_diff
+from reporting.generator import generate_report
 from scrapers.arena import scrape_arena
-from scrapers.vellum import scrape_vellum
 from scrapers.artificial_analysis import scrape_artificial_analysis
 from scrapers.llmstats import scrape_llmstats
 from scrapers.openrouter import scrape_openrouter
-from logic.diff import run_diff
-from reporting.generator import generate_report
-from bot.sender import send_telegram_message
+from scrapers.vellum import scrape_vellum
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 STATE_FILE = "state/last_run.json"
+
 
 def main():
     load_dotenv()
@@ -79,13 +84,17 @@ def main():
     diff_report = run_diff(current_state, previous_state)
 
     # Check if there are significant changes
-    has_changes = bool(diff_report.get('new_entries') or diff_report.get('rank_changes'))
+    has_changes = bool(
+        diff_report.get("new_entries") or diff_report.get("rank_changes")
+    )
 
     # --- Default: update state at the end of the run ---
     should_update_state = True
-    
+
     if has_changes:
-        logging.info(f"Changes detected: {len(diff_report['new_entries'])} new models, {len(diff_report['rank_changes'])} rank changes.")
+        logging.info(
+            f"Changes detected: {len(diff_report['new_entries'])} new models, {len(diff_report['rank_changes'])} rank changes."
+        )
 
         # 5. Generate Report
         logging.debug(f"Diff Report: {json.dumps(diff_report, indent=2)}")
@@ -100,7 +109,9 @@ def main():
             if success:
                 logging.info("Report published successfully.")
             else:
-                logging.error("Failed to publish report. State will NOT be updated (will retry next run).")
+                logging.error(
+                    "Failed to publish report. State will NOT be updated (will retry next run)."
+                )
                 should_update_state = False
         else:
             logging.info("Changes detected but deemed insignificant by reporter.")
@@ -113,7 +124,10 @@ def main():
             json.dump(current_state, f, indent=2)
         logging.info(f"State saved to {STATE_FILE}.")
     else:
-        logging.warning(f"State NOT updated — retaining previous {STATE_FILE} for retry.")
+        logging.warning(
+            f"State NOT updated — retaining previous {STATE_FILE} for retry."
+        )
+
 
 if __name__ == "__main__":
     main()

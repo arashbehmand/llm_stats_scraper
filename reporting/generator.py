@@ -1,20 +1,37 @@
-import os
-import logging
 import json
-from langchain_litellm import ChatLiteLLM
-from langchain_core.prompts import ChatPromptTemplate
+import logging
+import os
+
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_litellm import ChatLiteLLM
+
 from utils.langfuse_setup import initialize_langfuse
 
-
 METRIC_CANDIDATE_KEYS = [
-    "elo", "rating", "score", "overall",
-    "quality_index", "intelligence_index",
-    "gpqa", "gpqa_diamond", "mmlu", "mmlu_pro",
-    "aime_24", "aime_25", "math_index", "math_500",
-    "livecodebench", "swe_bench", "humanitys_last_exam",
-    "p50_latency", "p50_throughput", "provider_count",
-    "request_count", "usage_share_pct", "usage_metric_key"
+    "elo",
+    "rating",
+    "score",
+    "overall",
+    "quality_index",
+    "intelligence_index",
+    "gpqa",
+    "gpqa_diamond",
+    "mmlu",
+    "mmlu_pro",
+    "aime_24",
+    "aime_25",
+    "math_index",
+    "math_500",
+    "livecodebench",
+    "swe_bench",
+    "humanitys_last_exam",
+    "p50_latency",
+    "p50_throughput",
+    "provider_count",
+    "request_count",
+    "usage_share_pct",
+    "usage_metric_key",
 ]
 
 
@@ -112,7 +129,7 @@ def generate_report(diff_report, current_state=None):
         logging.error("Reporting: Invalid JSON in REPORTING_LLM_CONFIG.")
         return None
 
-    if not diff_report.get('new_entries') and not diff_report.get('rank_changes'):
+    if not diff_report.get("new_entries") and not diff_report.get("rank_changes"):
         logging.info("Reporting: No significant changes to report.")
         return None
 
@@ -132,12 +149,14 @@ def generate_report(diff_report, current_state=None):
     if current_state:
         for source, models in current_state.items():
             # Ensure models is a list
-            if not isinstance(models, list): continue
+            if not isinstance(models, list):
+                continue
 
             # Filter out None/empty
             valid_models = [m for m in models if isinstance(m, dict)]
 
-            if not valid_models: continue
+            if not valid_models:
+                continue
 
             # Add Header for this Source
             context_lines.append(f"\nSource: {source.upper()}")
@@ -146,17 +165,19 @@ def generate_report(diff_report, current_state=None):
             # Take top 10
             for m in valid_models[:10]:
                 try:
-                    score = m.get('score', 0)
+                    score = m.get("score", 0)
                     if isinstance(score, float):
-                         score = f"{score:.2f}"
+                        score = f"{score:.2f}"
 
                     metrics = _format_metrics_inline(m.get("details", {}))
-                    line = ",".join([
-                        _to_csv_cell(m.get("rank")),
-                        _to_csv_cell(m.get("model")),
-                        _to_csv_cell(score),
-                        _to_csv_cell(metrics),
-                    ])
+                    line = ",".join(
+                        [
+                            _to_csv_cell(m.get("rank")),
+                            _to_csv_cell(m.get("model")),
+                            _to_csv_cell(score),
+                            _to_csv_cell(metrics),
+                        ]
+                    )
                     context_lines.append(line)
                 except:
                     continue
@@ -166,10 +187,15 @@ def generate_report(diff_report, current_state=None):
     # Prepare changes as markdown paragraphs (one block per detected change).
     markdown_changes = _format_changes_markdown(diff_report)
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("user", "CONTEXT (CSV):\n```csv\n{context}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```")
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            (
+                "user",
+                "CONTEXT (CSV):\n```csv\n{context}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```",
+            ),
+        ]
+    )
 
     # Initialize ChatLiteLLM with config from JSON
     # We extract 'model' as it's a required positional/keyword arg for ChatLiteLLM usually,
@@ -178,17 +204,17 @@ def generate_report(diff_report, current_state=None):
     if "model" not in llm_config:
         logging.error("Reporting: 'model' key missing in REPORTING_LLM_CONFIG.")
         return None
-    
+
     try:
         llm = ChatLiteLLM(**llm_config)
         chain = prompt | llm | StrOutputParser()
-    
+
         report = chain.invoke({"context": csv_context, "changes": markdown_changes})
-        
+
         # Post-processing (length check only)
         if len(report) > 4000:
             report = report[:4000] + "...\n(Report truncated)"
-        
+
         logging.info("Reporting: Generated update.")
         return report
     except Exception as e:
