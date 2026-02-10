@@ -93,13 +93,8 @@ class DiffEngine:
                     prev_score = float(prev_item.get('score', 0))
                     score_diff = curr_score - prev_score
 
-                    # Threshold depends on scale.
-                    # Arena uses Elo (1000-1300+). +10 is significant? Maybe +20.
-                    # Vellum uses Elo/WinRate?
-                    # LLMStats uses Elo?
-
-                    # Heuristic: 2% change or > 20 points
-                    if abs(score_diff) > 20:
+                    threshold = self._score_change_threshold(source)
+                    if abs(score_diff) >= threshold:
                          self.report['score_changes'].append({
                             "source": source,
                             "model": model,
@@ -109,6 +104,22 @@ class DiffEngine:
                         })
                 except (ValueError, TypeError):
                     pass
+
+    def _score_change_threshold(self, source):
+        """
+        Source-specific score-change thresholds tuned to each metric scale.
+        """
+        thresholds = {
+            "arena_text": 20.0,
+            "arena_vision": 20.0,
+            "arena_code": 20.0,
+            "llmstats": 20.0,
+            "vellum": 2.0,
+            "artificial_analysis": 2.0,
+            # OpenRouter score is usage share percentage points (0-100).
+            "openrouter": 0.5,
+        }
+        return thresholds.get(source, 20.0)
 
     def _find_displaced_model(self, rank, prev_list):
         """

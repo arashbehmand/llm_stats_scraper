@@ -1,4 +1,7 @@
 python-dotenv
 requests
-langchain-openai
+langchain-community==0.4.1
+langchain-litellm==0.5.0
+litellm==1.81.9
+langfuse<3
 pyTelegramBotAPI

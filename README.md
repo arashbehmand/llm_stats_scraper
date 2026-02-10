@@ -19,6 +19,7 @@ A Dockerized Python application that monitors major LLM leaderboards (LMSYS Aren
 - Python 3.11+
 - OpenAI API Key (for report generation)
 - Telegram Bot Token & Channel ID
+- Optional: Langfuse account + API keys (for LLM tracing)
 
 ## Installation
 
@@ -93,6 +94,20 @@ You can customize the style and persona of the news reports by editing `reportin
 ### Thresholds
 Adjust `logic/diff.py` to change sensitivity for rank/score changes (e.g., minimum rank jump to report).
 
+### Langfuse (Optional)
+You can enable Langfuse tracing for report generation calls (LiteLLM) by setting:
+
+```ini
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+```
+
+Notes:
+- If `LANGFUSE_ENABLED` is `false`, tracing is still enabled automatically when both Langfuse keys are present.
+- If not configured, the app behavior is unchanged.
+
 ## Project Structure
 
 ```
@@ -102,6 +117,7 @@ llm_stats_scraper/
 ├── reporting/          # LangChain report generation
 ├── scrapers/           # Individual leaderboard scrapers
 ├── state/              # JSON storage for last run state
+├── utils/              # Shared helpers (including Langfuse bootstrap)
 ├── main.py             # Entry point
 └── requirements.txt    # Python dependencies
 ```
