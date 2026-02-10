@@ -6,8 +6,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_litellm import ChatLiteLLM
 
-from utils.langfuse_setup import initialize_langfuse
-
 METRIC_CANDIDATE_KEYS = [
     "elo",
     "rating",
@@ -134,7 +132,7 @@ def generate_report(diff_report, current_state=None):
         return None
 
     # Best-effort observability; no-op unless Langfuse env is configured.
-    initialize_langfuse()
+    # initialize_langfuse() # Already initialized in main.py
 
     # Load external prompt
     try:

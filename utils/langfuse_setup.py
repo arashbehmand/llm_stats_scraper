@@ -35,20 +35,20 @@ def initialize_langfuse():
     enabled = explicit_enabled or (public_key and secret_key)
 
     if not enabled:
-        return False
+        return None
 
     if not public_key or not secret_key:
         logging.warning(
             "Langfuse: enabled but LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY are missing."
         )
-        return False
+        return None
 
     try:
         import litellm
         from langfuse import Langfuse
     except Exception as exc:
         logging.warning(f"Langfuse: dependency import failed: {exc}")
-        return False
+        return None
 
     # LiteLLM 1.81.x passes sdk_integration to Langfuse().
     # If installed langfuse does not accept it (e.g. incompatible major),
@@ -61,10 +61,10 @@ def initialize_langfuse():
                 "(missing sdk_integration in Langfuse.__init__). "
                 "Disable Langfuse or install langfuse<3."
             )
-            return False
+            return None
     except Exception as exc:
         logging.warning(f"Langfuse: failed to inspect client signature: {exc}")
-        return False
+        return None
 
     # LiteLLM's Langfuse integration reads credentials from env vars.
     # Keep host optional; Langfuse Cloud default is used if not provided.
@@ -84,4 +84,4 @@ def initialize_langfuse():
     )
 
     logging.info("Langfuse: tracing enabled for LiteLLM calls.")
-    return True
+    return Langfuse()

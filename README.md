@@ -161,7 +161,7 @@ You can customize the style and persona of the news reports by editing `reportin
 Adjust `logic/diff.py` to change sensitivity for rank/score changes (e.g., minimum rank jump to report).
 
 ### Langfuse (Optional)
-You can enable Langfuse tracing for report generation calls (LiteLLM) by setting:
+You can enable Langfuse tracing for full pipeline visibility (scraping, state loading, diff calculation, report generation) by setting:
 
 ```ini
 LANGFUSE_ENABLED=true
