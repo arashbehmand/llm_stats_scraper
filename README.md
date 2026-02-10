@@ -4,20 +4,23 @@ A Dockerized Python application that monitors major LLM leaderboards (LMSYS Aren
 
 ## Features
 
-- **Multi-Source Scraping**: Monitors 4 major leaderboards:
-    - [LMSYS Chatbot Arena](https://chat.lmsys.org/) (Text & Vision)
+- **Multi-Source Scraping**: Monitors 5 major leaderboards:
+    - [LMSYS Chatbot Arena](https://chat.lmsys.org/) (Text, Vision & Code)
     - [Vellum](https://www.vellum.ai/llm-leaderboard)
     - [Artificial Analysis](https://artificialanalysis.ai/)
     - [LLMStats](https://llm-stats.com/) (via ZeroEval API)
+    - [OpenRouter](https://openrouter.ai/rankings) (Weekly rankings)
 - **Smart Diff Engine**: Detects meaningful changes (new entrants, significant rank swaps, score spikes) while filtering out noise.
-- **AI Reporting**: Uses GPT-4o (via LangChain) to generate professional "Breaking News" updates.
-- **Telegram Integration**: Automatically posts updates to your channel.
+- **AI Reporting**: Uses GPT-5 / Gemini-3-Flash (via LangChain + LiteLLM) to generate professional "Breaking News" updates.
+- **Telegram Integration**: Automatically posts updates to your channel with retry logic and HTML/plain text fallback for reliability.
 - **State Persistence**: Tracks history to compare against the last successful run.
+- **LLM Tracing**: Optional Langfuse integration for monitoring and debugging report generation.
+- **State Management Utility**: Manual state modification tool for testing and troubleshooting.
 
 ## Prerequisites
 
 - Python 3.11+
-- OpenAI API Key (for report generation)
+- OpenAI/Gemini API Key (for report generation)
 - Telegram Bot Token & Channel ID
 - Optional: Langfuse account + API keys (for LLM tracing)
 
@@ -44,6 +47,9 @@ A Dockerized Python application that monitors major LLM leaderboards (LMSYS Aren
     TELEGRAM_TOKEN=your_bot_token_here
     TELEGRAM_CHAT_ID=@your_channel_name
     OPENAI_API_KEY=sk-...
+    
+    # Optional: Custom LLM configuration for report generation
+    REPORTING_LLM_CONFIG={"model": "gemini/gemini-3-flash-preview", "thinking_level": "medium"}
     ```
 
 ## Usage
@@ -86,7 +92,27 @@ To run hourly via cron (alternative to Docker Compose):
 0 * * * * cd /path/to/llm_stats_scraper && /usr/bin/python3 main.py >> /var/log/llm_bot.log 2>&1
 ```
 
+### State Management Utility
+For testing or troubleshooting, you can manually modify the saved state using:
+```bash
+python modify_state.py
+```
+This utility allows you to remove specific models from the state file, useful for forcing re-detection of changes or testing diff logic.
+
 ## Customization
+
+### Reporting LLM Model
+You can customize which LLM model is used for report generation by setting the `REPORTING_LLM_CONFIG` environment variable:
+
+```ini
+REPORTING_LLM_CONFIG={"model": "gemini/gemini-3-flash-preview", "thinking_level": "medium"}
+```
+
+Supported parameters:
+- `model`: Any LiteLLM-compatible model identifier (e.g., `gpt-4o`, `claude-4-5-sonnet-20250929`, `gemini/gemini-3-flash-preview`)
+- `thinking_level`: For models that support extended thinking (e.g., Gemini 3.0), set to `low`, `medium`, or `high`
+
+If not specified, defaults to `gpt-4o`.
 
 ### Reporting Prompt
 You can customize the style and persona of the news reports by editing `reporting/prompt.txt`. This file contains the system prompt used by the AI News Anchor.
@@ -112,12 +138,13 @@ Notes:
 
 ```
 llm_stats_scraper/
-├── bot/                # Telegram messaging logic
+├── bot/                # Telegram messaging logic (retry + fallback)
 ├── logic/              # Diff engine (change detection)
-├── reporting/          # LangChain report generation
-├── scrapers/           # Individual leaderboard scrapers
+├── reporting/          # LangChain + LiteLLM report generation
+├── scrapers/           # Individual leaderboard scrapers (Arena, Vellum, Artificial Analysis, LLMStats, OpenRouter)
 ├── state/              # JSON storage for last run state
-├── utils/              # Shared helpers (including Langfuse bootstrap)
+├── utils/              # Shared helpers (Langfuse integration)
 ├── main.py             # Entry point
+├── modify_state.py     # State management utility
 └── requirements.txt    # Python dependencies
 ```
