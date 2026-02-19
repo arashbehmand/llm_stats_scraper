@@ -5,7 +5,7 @@ from contextlib import contextmanager
 
 from dotenv import load_dotenv
 
-from bot.sender import send_telegram_message
+from bot.publish import drain_all_outboxes, publish_report
 from logic.diff import run_diff
 from reporting.generator import generate_report
 from scrapers.arena import scrape_arena
@@ -36,6 +36,7 @@ SCRAPERS = [
 # Langfuse helpers
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _span(parent, name):
     """Yield a Langfuse span if *parent* is truthy, otherwise yield None."""
@@ -52,6 +53,7 @@ def _span(parent, name):
 # ---------------------------------------------------------------------------
 # Pipeline helpers
 # ---------------------------------------------------------------------------
+
 
 def run_scrapers(trace):
     """Run every scraper and return the current-state dict."""
@@ -89,9 +91,10 @@ def save_state(path, data):
 
 
 def report_and_publish(diff_report, current_state, trace):
-    """Generate an LLM report and send it via Telegram.
+    """Generate an LLM report and enqueue it for all configured channels.
 
-    Returns True if state should be updated, False if publish failed (retry next run).
+    Always returns True — the report is durably saved to outbox before any
+    delivery attempt, so state should always be updated.
     """
     logging.info(
         f"Changes detected: {len(diff_report['new_entries'])} new models, "
@@ -106,23 +109,25 @@ def report_and_publish(diff_report, current_state, trace):
         return True
 
     logging.info(f"Generated Report: {report_text}...")
-    with _span(trace, "Telegram Send") as tg_sp:
-        success = send_telegram_message(report_text)
-        if tg_sp:
-            tg_sp.update(metadata={"success": success})
+    with _span(trace, "Publish") as pub_sp:
+        publish_report(report_text)
+        if pub_sp:
+            pub_sp.update(metadata={"queued": True})
 
-    if not success:
-        logging.error("Failed to publish report. State will NOT be updated (will retry next run).")
-    return success
+    return True
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     load_dotenv()
     logging.info("Starting LLM Stats Scraper...")
+
+    # Retry any messages that failed to deliver in the previous run
+    drain_all_outboxes()
 
     langfuse = initialize_langfuse()
     trace = langfuse.trace(name="LLM Stats Scraper Run") if langfuse else None
@@ -145,12 +150,14 @@ def main():
             diff_report.get("new_entries") or diff_report.get("rank_changes")
         )
         if diff_sp:
-            diff_sp.update(metadata={
-                "new_entries": len(diff_report.get("new_entries", [])),
-                "rank_changes": len(diff_report.get("rank_changes", [])),
-                "score_changes": len(diff_report.get("score_changes", [])),
-                "has_significant_changes": has_changes,
-            })
+            diff_sp.update(
+                metadata={
+                    "new_entries": len(diff_report.get("new_entries", [])),
+                    "rank_changes": len(diff_report.get("rank_changes", [])),
+                    "score_changes": len(diff_report.get("score_changes", [])),
+                    "has_significant_changes": has_changes,
+                }
+            )
 
     # 4. Report, publish & persist state
     if has_changes:
@@ -162,7 +169,9 @@ def main():
     if should_update:
         save_state(STATE_FILE, current_state)
     else:
-        logging.warning(f"State NOT updated — retaining previous {STATE_FILE} for retry.")
+        logging.warning(
+            f"State NOT updated — retaining previous {STATE_FILE} for retry."
+        )
 
 
 if __name__ == "__main__":
