@@ -90,7 +90,7 @@ def scrape_openrouter():
                         normalized = []
                         for rank, entry in enumerate(raw_data, start=1):
                             usage_value = usage_values[rank - 1]
-                            usage_share_pct = (usage_value / total_usage) * 100.0
+                            usage_share_pct = round((usage_value / total_usage) * 100.0, 3)
                             normalized.append(
                                 {
                                     "model": entry.get("name", "Unknown"),

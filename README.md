@@ -52,7 +52,10 @@ This project demonstrates end-to-end development of a production-ready data pipe
     - [OpenRouter](https://openrouter.ai/rankings) (Weekly rankings)
 - **Smart Diff Engine**: Detects meaningful changes (new entrants, significant rank swaps, score spikes) while filtering out noise.
 - **AI Reporting**: Uses GPT-5 / Gemini-3-Flash (via LangChain + LiteLLM) to generate professional "Breaking News" updates.
+- **Multi-Channel Publishing**: Supports both Telegram and WhatsApp delivery with configurable targets.
 - **Telegram Integration**: Automatically posts updates to your channel with retry logic and HTML/plain text fallback for reliability.
+- **WhatsApp Integration**: Sends updates to WhatsApp channels via Whapi.cloud gateway with automatic HTML-to-plaintext conversion.
+- **Reliable Delivery**: File-based outbox system ensures messages are never lost - failed deliveries are automatically retried on the next run.
 - **State Persistence**: Tracks history to compare against the last successful run.
 - **LLM Tracing**: Optional Langfuse integration for monitoring and debugging report generation.
 - **State Management Utility**: Manual state modification tool for testing and troubleshooting.
@@ -61,7 +64,8 @@ This project demonstrates end-to-end development of a production-ready data pipe
 
 - Python 3.11+
 - OpenAI/Gemini API Key (for report generation)
-- Telegram Bot Token & Channel ID
+- Telegram Bot Token & Channel ID (for Telegram delivery)
+- Optional: Whapi.cloud account + API token (for WhatsApp delivery)
 - Optional: Langfuse account + API keys (for LLM tracing)
 
 ## Installation
@@ -84,8 +88,20 @@ This project demonstrates end-to-end development of a production-ready data pipe
     ```
     Edit `.env`:
     ```ini
+    # Publishing Configuration
+    # Comma-separated list of enabled channels: telegram, whatsapp
+    PUBLISH_TARGETS=telegram,whatsapp
+    
+    # Telegram Configuration
     TELEGRAM_TOKEN=your_bot_token_here
     TELEGRAM_CHAT_ID=@your_channel_name
+    
+    # WhatsApp Configuration (via Whapi.cloud gateway)
+    WHAPI_API_URL=https://gate.whapi.cloud
+    WHAPI_TOKEN=your_whapi_token
+    WHATSAPP_CHANNEL_JID=123456789@newsletter
+    
+    # LLM Configuration
     OPENAI_API_KEY=sk-...
     
     # Optional: Custom LLM configuration for report generation
@@ -139,6 +155,47 @@ python modify_state.py
 ```
 This utility allows you to remove specific models from the state file, useful for forcing re-detection of changes or testing diff logic.
 
+## Publishing Channels
+
+### Multi-Channel Delivery
+The bot supports publishing to multiple channels simultaneously. Configure via the `PUBLISH_TARGETS` environment variable:
+
+```ini
+# Enable both Telegram and WhatsApp
+PUBLISH_TARGETS=telegram,whatsapp
+
+# Telegram only (default)
+PUBLISH_TARGETS=telegram
+
+# WhatsApp only
+PUBLISH_TARGETS=whatsapp
+```
+
+### WhatsApp Setup
+To enable WhatsApp delivery:
+
+1. Sign up for a [Whapi.cloud](https://whapi.cloud/) account
+2. Get your API token and channel JID (newsletter ID)
+3. Configure the environment variables:
+   ```ini
+   WHAPI_API_URL=https://gate.whapi.cloud
+   WHAPI_TOKEN=your_whapi_token
+   WHATSAPP_CHANNEL_JID=123456789@newsletter
+   ```
+4. Add `whatsapp` to your `PUBLISH_TARGETS`
+
+Note: The bot automatically converts Telegram HTML formatting to WhatsApp-compatible markdown.
+
+### Outbox & Reliability
+Each channel uses a file-based outbox (`state/outbox/<channel>.json`) for guaranteed delivery:
+
+- **Durability**: Messages are saved to disk before any delivery attempt
+- **Automatic Retry**: Failed messages are retried on the next run
+- **Batching**: Multiple pending messages are combined with separators
+- **Channel Isolation**: Each channel's outbox is independent
+
+If delivery fails (network issue, rate limit, etc.), the message remains queued and will be automatically retried when the script runs next. State is always updated after report generation to prevent duplicate change detection.
+
 ## Customization
 
 ### Reporting LLM Model
@@ -178,11 +235,17 @@ Notes:
 
 ```
 llm_stats_scraper/
-├── bot/                # Telegram messaging logic (retry + fallback)
+├── bot/                # Multi-channel publishing logic
+│   ├── outbox.py       # File-based outbox for reliable delivery
+│   ├── publish.py      # Multi-channel publisher (orchestrates telegram + whatsapp)
+│   ├── sender.py       # Telegram sender (retry + fallback)
+│   └── whatsapp_sender.py  # WhatsApp sender (via Whapi.cloud)
 ├── logic/              # Diff engine (change detection)
 ├── reporting/          # LangChain + LiteLLM report generation
 ├── scrapers/           # Individual leaderboard scrapers (Arena, Vellum, Artificial Analysis, LLMStats, OpenRouter)
-├── state/              # JSON storage for last run state
+├── state/              # JSON storage for last run state and outbox files
+│   ├── last_run.json   # Previous scrape results
+│   └── outbox/         # Per-channel pending messages
 ├── utils/              # Shared helpers (Langfuse integration)
 ├── main.py             # Entry point
 ├── modify_state.py     # State management utility
