@@ -1,0 +1,21 @@
+# Set PATH so cron can find python
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Run the scraper every hour at minute 0
+# Format: minute hour day month weekday command
+# 0 * * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+
+# Example schedules (uncomment and modify as needed):
+# Run every 6 hours:
+# 0 */6 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+
+# Run only during business hours (9 AM to 5 PM) every hour:
+# 0 9-17 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+
+# Run on specific hours (e.g., 8 AM, 12 PM, 4 PM, 8 PM):
+0 8,12,16,20 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+
+# Run once per day at 2 AM:
+# 0 2 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+
+# Don't remove this empty line - cron needs it

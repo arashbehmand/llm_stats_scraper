@@ -4,9 +4,8 @@ services:
     container_name: llm-bot
     volumes:
       - ./state:/app/state
+      - ./crontab:/app/crontab  # Mount crontab for easy editing
     env_file:
       - .env
     restart: unless-stopped
-    # Run the script, sleep for configured interval (default 1 hour), and repeat.
-    # We use sh -c to allow the loop structure.
-    command: sh -c "while true; do echo 'Starting run...'; python main.py || echo 'Script failed, will retry...'; echo 'Run complete. Sleeping...'; sleep $${SLEEP_INTERVAL_SECONDS:-3600}; done"
+    # Cron-based scheduling - edit crontab file to change schedule

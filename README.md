@@ -129,21 +129,39 @@ docker run --env-file .env -v $(pwd)/state:/app/state llm-bot
 ```
 
 ### Docker Compose (Recommended)
-Use Docker Compose to run the bot as a background service that checks for updates every hour.
+Use Docker Compose to run the bot as a background service with cron-based scheduling.
 
-1. Ensure `.env` is configured.
-2. Run:
+1. **Configure the schedule**: Edit `crontab` to set when the scraper runs:
    ```bash
-   docker compose up -d
+   # Run every hour (default)
+   0 * * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+   
+   # Business hours only (9 AM - 5 PM)
+   0 9-17 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
+   
+   # Specific times (8 AM, 12 PM, 4 PM, 8 PM)
+   0 8,12,16,20 * * * cd /app && /usr/local/bin/python main.py >> /var/log/cron.log 2>&1
    ```
-   This will build the image and start the container in a loop (interval: 1 hour).
-   Logs can be viewed with:
+
+2. **Ensure `.env` is configured.**
+
+3. **Start the service**:
+   ```bash
+   docker compose up --build -d
+   ```
+   
+4. **View logs**:
    ```bash
    docker compose logs -f
    ```
 
-### Automation
-To run hourly via cron (alternative to Docker Compose):
+5. **After changing the schedule**: Simply restart the container:
+   ```bash
+   docker compose restart
+   ```
+
+### Manual Cron Setup (Alternative)
+To run on a host machine via cron without Docker:
 ```bash
 0 * * * * cd /path/to/llm_stats_scraper && /usr/bin/python3 main.py >> /var/log/llm_bot.log 2>&1
 ```

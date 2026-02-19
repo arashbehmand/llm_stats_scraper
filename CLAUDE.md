@@ -3,6 +3,10 @@
 ## Commands
 - **Run Full Process**: `python main.py`
 - **Run Specific Scraper**: `python -m scrapers.arena`
+- **Docker Compose (cron-based)**: `docker compose up --build -d`
+- **View Logs**: `docker compose logs -f`
+- **Restart After Config**: `docker compose restart`
+- **Edit Schedule**: Modify `crontab` file, then restart
 - **Docker Build**: `docker build -t llm-bot .`
 - **Docker Run**: `docker run -v $(pwd)/state:/app/state --env-file .env llm-bot`
 
