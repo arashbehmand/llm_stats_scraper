@@ -200,6 +200,11 @@ def generate_report(diff_report, current_state=None, langfuse_context=None):
         chain = prompt | llm | StrOutputParser()
         report = chain.invoke({"context": csv_context, "changes": markdown_changes})
 
+        # Check if LLM determined there are no significant updates
+        if report and "no significant" in report.lower() and len(report) < 30:
+            logging.info("Reporting: LLM determined no significant updates.")
+            return None
+
         if len(report) > 4000:
             report = report[:4000] + "...\n(Report truncated)"
 
