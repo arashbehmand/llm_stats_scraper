@@ -1,5 +1,7 @@
 import logging
 
+from logic.history_store import canonical_model_key
+
 _SCORE_THRESHOLDS = {
     "arena_text": 20.0,
     "arena_vision": 20.0,
@@ -11,21 +13,10 @@ _SCORE_THRESHOLDS = {
 }
 
 
-def _find_displaced_model(rank, prev_list):
-    """Find which model was at this rank in the previous list."""
-    for item in prev_list:
-        if item["rank"] == rank:
-            return item["model"]
-    return None
-
-
-def _check_new_entry(source, item, prev_list):
+def _check_new_entry(source, item):
     """Build a new-entry record if the model just appeared in the top 20."""
     rank = item["rank"]
-    displaced = _find_displaced_model(rank, prev_list)
     context = f"Debuted at #{rank}"
-    if displaced:
-        context += f", likely pushing {displaced} down."
 
     return {
         "source": source,
@@ -34,6 +25,7 @@ def _check_new_entry(source, item, prev_list):
         "score": item["score"],
         "details": item.get("details", {}),
         "context": context,
+        "entry_type": "new_model",
     }
 
 
@@ -86,7 +78,14 @@ def _check_score_change(source, item, prev_item):
 def _analyze_source(source, current_list, prev_list):
     """Analyze a single source for new entries, rank changes, and score changes."""
     prev_map = {item["model"]: item for item in prev_list}
+    prev_family_map = {}
+    for prev_item in prev_list:
+        family = canonical_model_key(source, prev_item.get("model"))
+        if family:
+            prev_family_map.setdefault(family, []).append(prev_item.get("model"))
+
     result = {"new_entries": [], "rank_changes": [], "score_changes": [], "summary": []}
+    new_entry_ranks = []
 
     for item in current_list:
         model = item["model"]
@@ -96,8 +95,19 @@ def _analyze_source(source, current_list, prev_list):
             continue
 
         if model not in prev_map:
-            entry = _check_new_entry(source, item, prev_list)
+            entry = _check_new_entry(source, item)
+            family = canonical_model_key(source, model)
+            sibling_models = [
+                m for m in prev_family_map.get(family, []) if m and m != model
+            ]
+            if sibling_models:
+                entry["entry_type"] = "variant"
+                entry["variant_of"] = sibling_models[0]
+                entry["context"] = (
+                    f"Variant appeared at #{item['rank']} (related to {sibling_models[0]})"
+                )
             result["new_entries"].append(entry)
+            new_entry_ranks.append(item["rank"])
             result["summary"].append(f"[{source}] NEW: {model} at #{item['rank']}")
             continue
 
@@ -105,6 +115,13 @@ def _analyze_source(source, current_list, prev_list):
 
         rc = _check_rank_change(source, item, prev_item)
         if rc:
+            if rc["change"] < 0 and new_entry_ranks:
+                inserted_above = sum(
+                    1 for rank in new_entry_ranks if rank <= rc["old_rank"]
+                )
+                expected_rank = rc["old_rank"] + inserted_above
+                if expected_rank == rc["new_rank"]:
+                    continue
             result["rank_changes"].append(rc)
             result["summary"].append(
                 f"[{source}] {model} {rc['context'].split()[0]} to #{rc['new_rank']} (was #{rc['old_rank']})"

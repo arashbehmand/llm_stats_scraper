@@ -78,6 +78,10 @@ def _format_changes_markdown(diff_report):
         if change_type == "new_entry":
             lines.append(f"Rank: {change.get('rank')}")
             lines.append(f"Score: {change.get('score')}")
+            if change.get("entry_type"):
+                lines.append(f"Entry Type: {change.get('entry_type')}")
+            if change.get("variant_of"):
+                lines.append(f"Variant Of: {change.get('variant_of')}")
         elif change_type == "rank_change":
             lines.append(f"Old Rank: {change.get('old_rank')}")
             lines.append(f"New Rank: {change.get('new_rank')}")
@@ -163,7 +167,9 @@ def _build_csv_context(current_state):
     return "\n".join(context_lines)
 
 
-def generate_report(diff_report, current_state=None, langfuse_context=None):
+def generate_report(
+    diff_report, current_state=None, langfuse_context=None, history_context=""
+):
     """Generate a breaking-news report using LangChain and LiteLLM."""
     if not diff_report.get("new_entries") and not diff_report.get("rank_changes"):
         logging.info("Reporting: No significant changes to report.")
@@ -188,7 +194,7 @@ def generate_report(diff_report, current_state=None, langfuse_context=None):
             ("system", system_prompt),
             (
                 "user",
-                "CONTEXT (CSV):\n```csv\n{context}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```",
+                "CONTEXT (CSV):\n```csv\n{context}\n```\n\nHISTORY (BASELINE+DIFF):\n```text\n{history}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```",
             ),
         ]
     )
@@ -198,7 +204,13 @@ def generate_report(diff_report, current_state=None, langfuse_context=None):
             llm_config.setdefault("model_kwargs", {})["metadata"] = langfuse_context
         llm = ChatLiteLLM(**llm_config)
         chain = prompt | llm | StrOutputParser()
-        report = chain.invoke({"context": csv_context, "changes": markdown_changes})
+        report = chain.invoke(
+            {
+                "context": csv_context,
+                "history": history_context or "-",
+                "changes": markdown_changes,
+            }
+        )
 
         # Check if LLM determined there are no significant updates
         if report and "no significant" in report.lower() and len(report) < 30:

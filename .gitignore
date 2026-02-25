@@ -1,5 +1,5 @@
 _old/
-state/last_run.json
+state/
 .claude
 # Byte-compiled / optimized / DLL files
 __pycache__/

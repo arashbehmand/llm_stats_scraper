@@ -17,3 +17,4 @@
 - **State**: `last_run.json` is the source of truth.
 - **Error Handling**: If a scraper fails, log it and continue. Don't stop the whole process.
 - **Vellum**: Use static analysis (regex on HTML), NO Playwright.
+- **AI Code Signature Avoidance:** Don't add too much structure or comments. write this like an artisan baked hand written code.

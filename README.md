@@ -51,12 +51,15 @@ This project demonstrates end-to-end development of a production-ready data pipe
     - [LLMStats](https://llm-stats.com/) (via ZeroEval API)
     - [OpenRouter](https://openrouter.ai/rankings) (Weekly rankings)
 - **Smart Diff Engine**: Detects meaningful changes (new entrants, significant rank swaps, score spikes) while filtering out noise.
+- **Variant-Aware Change Detection**: Distinguishes likely model variants (e.g., thinking/high modes) from fully new families.
+- **Cascade Drop Suppression**: Avoids reporting obvious downstream rank drops caused only by newly inserted models above.
 - **AI Reporting**: Uses GPT-5 / Gemini-3-Flash (via LangChain + LiteLLM) to generate professional "Breaking News" updates.
 - **Multi-Channel Publishing**: Supports both Telegram and WhatsApp delivery with configurable targets.
 - **Telegram Integration**: Automatically posts updates to your channel with retry logic and HTML/plain text fallback for reliability.
 - **WhatsApp Integration**: Sends updates to WhatsApp channels via Whapi.cloud gateway with automatic HTML-to-plaintext conversion.
 - **Reliable Delivery**: File-based outbox system ensures messages are never lost - failed deliveries are automatically retried on the next run.
 - **State Persistence**: Tracks history to compare against the last successful run.
+- **Partitioned History**: Stores model events in monthly files (`state/events/YYYY-MM.jsonl`) and monthly snapshots (`state/snapshots/YYYY-MM.json`) with a rolling 60-day lookback window.
 - **LLM Tracing**: Optional Langfuse integration for monitoring and debugging report generation.
 - **State Management Utility**: Manual state modification tool for testing and troubleshooting.
 
@@ -173,6 +176,24 @@ python modify_state.py
 ```
 This utility allows you to remove specific models from the state file, useful for forcing re-detection of changes or testing diff logic.
 
+## Testing
+
+Run the compact logic-focused tests (diff + state/history storage):
+
+```bash
+pytest -q
+```
+
+or:
+
+```bash
+python -m pytest -q
+```
+
+Notes:
+- Test discovery is restricted to the local `tests/` directory via `pytest.ini`.
+- Tests intentionally skip bot delivery and scraper/network behavior.
+
 ## Publishing Channels
 
 ### Multi-Channel Delivery
@@ -261,11 +282,24 @@ llm_stats_scraper/
 ├── logic/              # Diff engine (change detection)
 ├── reporting/          # LangChain + LiteLLM report generation
 ├── scrapers/           # Individual leaderboard scrapers (Arena, Vellum, Artificial Analysis, LLMStats, OpenRouter)
-├── state/              # JSON storage for last run state and outbox files
+├── state/              # Runtime state and durable history
 │   ├── last_run.json   # Previous scrape results
+│   ├── model_baselines.json # Baseline identity records
+│   ├── history_meta.json # History rollover metadata
+│   ├── events/         # Monthly event partitions
+│   │   └── YYYY-MM.jsonl
+│   ├── snapshots/      # Monthly full-state snapshots
+│   │   └── YYYY-MM.json
 │   └── outbox/         # Per-channel pending messages
+├── tests/              # Focused unit tests for core logic
+├── pytest.ini          # Pytest discovery config
 ├── utils/              # Shared helpers (Langfuse integration)
 ├── main.py             # Entry point
 ├── modify_state.py     # State management utility
 └── requirements.txt    # Python dependencies
 ```
+
+History storage notes:
+- `state/events/YYYY-MM.jsonl`: Append-only monthly diff events.
+- `state/snapshots/YYYY-MM.json`: Full monthly state snapshot (updated through the month, finalized on month rollover).
+- `logic/history_store.py` keeps only the last 60 days of partitions for report context and prunes older partitions.

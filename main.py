@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from bot.publish import drain_all_outboxes, publish_report
 from logic.diff import run_diff
+from logic.history_store import build_history_context, update_history
 from reporting.generator import generate_report
 from scrapers.arena import scrape_arena
 from scrapers.artificial_analysis import scrape_artificial_analysis
@@ -90,7 +91,7 @@ def save_state(path, data):
     logging.info(f"State saved to {path}.")
 
 
-def report_and_publish(diff_report, current_state, trace):
+def report_and_publish(diff_report, current_state, trace, history_context):
     """Generate an LLM report and enqueue it for all configured channels.
 
     Always returns True — the report is durably saved to outbox before any
@@ -102,7 +103,9 @@ def report_and_publish(diff_report, current_state, trace):
     )
 
     langfuse_ctx = {"existing_trace_id": trace.id} if trace else None
-    report_text = generate_report(diff_report, current_state, langfuse_ctx)
+    report_text = generate_report(
+        diff_report, current_state, langfuse_ctx, history_context
+    )
 
     if not report_text:
         logging.info("Changes detected but deemed insignificant by reporter.")
@@ -140,12 +143,15 @@ def main():
 
     if not previous_state:
         logging.info("First run detected. Saving state and exiting.")
+        update_history(current_state, {})
         save_state(STATE_FILE, current_state)
         return
 
     # 3. Detect changes
     with _span(trace, "Diff Calculation") as diff_sp:
         diff_report = run_diff(current_state, previous_state)
+        update_history(current_state, previous_state)
+        history_context = build_history_context(diff_report)
         has_changes = bool(
             diff_report.get("new_entries") or diff_report.get("rank_changes")
         )
@@ -161,7 +167,9 @@ def main():
 
     # 4. Report, publish & persist state
     if has_changes:
-        should_update = report_and_publish(diff_report, current_state, trace)
+        should_update = report_and_publish(
+            diff_report, current_state, trace, history_context
+        )
     else:
         logging.info("No significant changes detected.")
         should_update = True
