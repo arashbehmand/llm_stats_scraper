@@ -12,6 +12,8 @@ _SCORE_THRESHOLDS = {
     "openrouter": 0.5,
 }
 
+_RANK_NEWS_CUTOFF = 10
+
 
 def _check_new_entry(source, item):
     """Build a new-entry record if the model just appeared in the top 20."""
@@ -115,12 +117,30 @@ def _analyze_source(source, current_list, prev_list):
 
         rc = _check_rank_change(source, item, prev_item)
         if rc:
+            # Lower-table churn is usually not actionable market news.
+            if (
+                rc["old_rank"] > _RANK_NEWS_CUTOFF
+                and rc["new_rank"] > _RANK_NEWS_CUTOFF
+            ):
+                continue
+
+            # Suppress minor drops in the lower half of the top-20.
+            if (
+                rc["change"] < 0
+                and abs(rc["change"]) <= 2
+                and rc["old_rank"] > 8
+                and rc["new_rank"] > 8
+            ):
+                continue
+
             if rc["change"] < 0 and new_entry_ranks:
                 inserted_above = sum(
                     1 for rank in new_entry_ranks if rank <= rc["old_rank"]
                 )
                 expected_rank = rc["old_rank"] + inserted_above
-                if expected_rank == rc["new_rank"]:
+                residual_drop = rc["new_rank"] - expected_rank
+                # Ignore mechanical displacement and near-mechanical one-step spillover.
+                if residual_drop <= 1:
                     continue
             result["rank_changes"].append(rc)
             result["summary"].append(

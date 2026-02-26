@@ -86,17 +86,17 @@ def scrape_openrouter():
                         if total_usage <= 0:
                             total_usage = 1.0
 
-                        # Normalize data to match other scrapers' format
+                        # Normalize to shared schema, then assign rank after sorting by usage.
                         normalized = []
-                        for rank, entry in enumerate(raw_data, start=1):
-                            usage_value = usage_values[rank - 1]
+                        for idx, entry in enumerate(raw_data):
+                            usage_value = usage_values[idx]
                             usage_share_pct = round(
                                 (usage_value / total_usage) * 100.0, 3
                             )
                             normalized.append(
                                 {
                                     "model": entry.get("name", "Unknown"),
-                                    "rank": rank,
+                                    "rank": 0,  # assigned after sorting
                                     "score": usage_share_pct,  # Usage share percentage (0-100)
                                     "source": "openrouter",
                                     "details": {
@@ -108,6 +108,15 @@ def scrape_openrouter():
                                     },
                                 }
                             )
+
+                        normalized.sort(
+                            key=lambda row: (
+                                -float(row.get("details", {}).get("usage_value", 0.0)),
+                                row.get("model", ""),
+                            )
+                        )
+                        for rank, row in enumerate(normalized, start=1):
+                            row["rank"] = rank
 
                         logging.info(
                             f"OpenRouter: Extracted {len(normalized)} models "

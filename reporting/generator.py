@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import re
+from datetime import datetime, timezone
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -142,6 +144,17 @@ def _build_csv_context(current_state):
         if not valid_models:
             continue
 
+        valid_models.sort(
+            key=lambda row: (
+                (
+                    row.get("rank")
+                    if isinstance(row.get("rank"), (int, float))
+                    else float("inf")
+                ),
+                str(row.get("model", "")),
+            )
+        )
+
         context_lines.append(f"\nSource: {source.upper()}")
         context_lines.append("Rank,Model,Score,Metrics")
 
@@ -167,6 +180,120 @@ def _build_csv_context(current_state):
     return "\n".join(context_lines)
 
 
+def _to_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _extract_model_year(model_name):
+    if not model_name:
+        return None
+    years = re.findall(r"(20\d{2})", str(model_name))
+    if not years:
+        return None
+    try:
+        return max(int(y) for y in years)
+    except ValueError:
+        return None
+
+
+def _is_legacy_model(model_name):
+    year = _extract_model_year(model_name)
+    if not year:
+        return False
+    current_year = datetime.now(timezone.utc).year
+    return year <= (current_year - 1)
+
+
+def _build_prompt_signals(diff_report, current_state):
+    lines = []
+    new_entries = diff_report.get("new_entries", [])
+    rank_changes = diff_report.get("rank_changes", [])
+
+    new_entry_ranks = {}
+    for entry in new_entries:
+        source = entry.get("source")
+        rank = _to_int(entry.get("rank"), 0)
+        if not source or rank <= 0:
+            continue
+        new_entry_ranks.setdefault(source, []).append(rank)
+
+    if new_entry_ranks:
+        lines.append("- new_entries_by_source:")
+        for source, ranks in sorted(new_entry_ranks.items()):
+            ranks_text = ", ".join(str(r) for r in sorted(ranks))
+            lines.append(f"  - {source}: inserted_ranks={ranks_text}")
+    else:
+        lines.append("- new_entries_by_source: none")
+
+    mechanical_candidates = []
+    low_priority_drops = []
+    for change in rank_changes:
+        if _to_int(change.get("change"), 0) >= 0:
+            continue
+        source = change.get("source")
+        model = change.get("model")
+        old_rank = _to_int(change.get("old_rank"), 0)
+        new_rank = _to_int(change.get("new_rank"), 0)
+
+        inserted = sum(
+            1 for rank in new_entry_ranks.get(source, []) if rank <= old_rank
+        )
+        expected_rank = old_rank + inserted
+        residual_drop = new_rank - expected_rank
+
+        if residual_drop <= 1:
+            mechanical_candidates.append(f"{source}:{model}")
+            continue
+
+        if old_rank > 10 and new_rank > 10:
+            low_priority_drops.append(f"{source}:{model} (lower-table)")
+            continue
+
+        if _is_legacy_model(model) and new_rank > 8:
+            low_priority_drops.append(f"{source}:{model} (legacy)")
+
+    if mechanical_candidates:
+        lines.append(
+            "- mechanical_drop_candidates: " + ", ".join(mechanical_candidates[:10])
+        )
+    else:
+        lines.append("- mechanical_drop_candidates: none")
+
+    if low_priority_drops:
+        lines.append("- low_priority_drops: " + ", ".join(low_priority_drops[:10]))
+    else:
+        lines.append("- low_priority_drops: none")
+
+    openrouter_rows = (current_state or {}).get("openrouter", [])
+    if isinstance(openrouter_rows, list) and openrouter_rows:
+        ranked = [row for row in openrouter_rows if isinstance(row, dict)]
+        ranked.sort(
+            key=lambda row: (
+                -float(row.get("details", {}).get("usage_value", 0.0)),
+                str(row.get("model", "")),
+            )
+        )
+        top = ranked[0] if ranked else None
+        if top:
+            model = top.get("model", "unknown")
+            usage_share = top.get("details", {}).get(
+                "usage_share_pct", top.get("score")
+            )
+            usage_value = top.get("details", {}).get("usage_value", "?")
+            rank = _to_int(top.get("rank"), 0)
+            lines.append(
+                f"- openrouter_top_by_usage: {model} "
+                f"(rank={rank}, usage_share_pct={usage_share}, usage_value={usage_value})"
+            )
+    else:
+        lines.append("- openrouter_top_by_usage: unavailable")
+
+    return "\n".join(lines)
+
+
 def generate_report(
     diff_report, current_state=None, langfuse_context=None, history_context=""
 ):
@@ -188,13 +315,14 @@ def generate_report(
 
     csv_context = _build_csv_context(current_state)
     markdown_changes = _format_changes_markdown(diff_report)
+    derived_signals = _build_prompt_signals(diff_report, current_state)
 
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
             (
                 "user",
-                "CONTEXT (CSV):\n```csv\n{context}\n```\n\nHISTORY (BASELINE+DIFF):\n```text\n{history}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```",
+                "CONTEXT (CSV):\n```csv\n{context}\n```\n\nHISTORY (BASELINE+DIFF):\n```text\n{history}\n```\n\nSIGNALS (DERIVED):\n```text\n{signals}\n```\n\nCHANGES (MARKDOWN):\n```markdown\n{changes}\n```",
             ),
         ]
     )
@@ -208,6 +336,7 @@ def generate_report(
             {
                 "context": csv_context,
                 "history": history_context or "-",
+                "signals": derived_signals or "-",
                 "changes": markdown_changes,
             }
         )

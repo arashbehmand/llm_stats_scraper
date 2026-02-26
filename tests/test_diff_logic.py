@@ -69,7 +69,7 @@ def test_non_cascade_rank_drop_is_reported():
         "openrouter": [
             _row("X", 1, 0.7),
             _row("A", 2, 1.0),
-            _row("B", 4, 0.9),
+            _row("B", 5, 0.9),
             _row("C", 3, 0.8),
         ]
     }
@@ -78,6 +78,15 @@ def test_non_cascade_rank_drop_is_reported():
     assert report is not None
     models = [change["model"] for change in report["rank_changes"]]
     assert "B" in models
+
+
+def test_lower_table_rank_churn_is_suppressed():
+    previous = {"arena_vision": [_row("Old Model", 11, 1200.0)]}
+    current = {"arena_vision": [_row("Old Model", 13, 1199.0)]}
+
+    report = run_diff(current, previous)
+    assert report is not None
+    assert report["rank_changes"] == []
 
 
 def test_score_change_uses_source_threshold():

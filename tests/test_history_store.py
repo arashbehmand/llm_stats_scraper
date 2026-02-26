@@ -145,6 +145,7 @@ def test_build_history_context_reads_only_recent_lookback(tmp_path, monkeypatch)
     )
 
     assert "2026-01-10T00:00:00+00:00" not in history
-    assert "2026-03-18T00:00:00+00:00" in history
+    assert "2026-03-18T00:00:00+00:00" not in history
     assert "2026-03-29T00:00:00+00:00" in history
     assert "2026-03-05T00:00:00+00:00" not in history
+    assert "moves(rank=2,score=0)" in history

@@ -269,28 +269,140 @@ def update_history(current_state, previous_state):
     _prune_old_partitions(cutoff)
 
 
+def _extract_change(value):
+    if isinstance(value, dict):
+        return value.get("from"), value.get("to")
+    if value is None:
+        return None, None
+    return None, value
+
+
+def _format_value(value):
+    if value is None:
+        return "?"
+    if isinstance(value, float):
+        return f"{value:.2f}"
+    return str(value)
+
+
+def _format_change(field, before, after):
+    if before is None and after is None:
+        return ""
+    if before == after:
+        return ""
+    if before is None:
+        return f"{field}={_format_value(after)}"
+    return f"{field}:{_format_value(before)}->{_format_value(after)}"
+
+
+def _summarize_model_history(events, baseline):
+    events_sorted = sorted(
+        events,
+        key=lambda evt: _parse_iso(evt.get("ts"))
+        or datetime.min.replace(tzinfo=timezone.utc),
+    )
+
+    base_state = (
+        (baseline or {}).get("base_state", {}) if isinstance(baseline, dict) else {}
+    )
+    first_seen = (
+        (baseline or {}).get("first_seen_at") if isinstance(baseline, dict) else None
+    )
+    if not first_seen and events_sorted:
+        first_seen = events_sorted[0].get("ts")
+
+    base_rank = base_state.get("rank")
+    base_score = base_state.get("score")
+    latest_rank = base_rank
+    latest_score = base_score
+    rank_moves = 0
+    score_moves = 0
+    last_change = ""
+
+    for evt in events_sorted:
+        delta = evt.get("delta", {})
+        if not isinstance(delta, dict):
+            continue
+
+        rank_from, rank_to = _extract_change(delta.get("rank"))
+        score_from, score_to = _extract_change(delta.get("score"))
+        rank_changed = rank_from != rank_to and (
+            rank_from is not None or rank_to is not None
+        )
+        score_changed = score_from != score_to and (
+            score_from is not None or score_to is not None
+        )
+
+        if rank_changed:
+            rank_moves += 1
+        if score_changed:
+            score_moves += 1
+
+        if rank_to is not None:
+            latest_rank = rank_to
+        elif rank_from is not None and latest_rank is None:
+            latest_rank = rank_from
+
+        if score_to is not None:
+            latest_score = score_to
+        elif score_from is not None and latest_score is None:
+            latest_score = score_from
+
+        if rank_changed or score_changed:
+            parts = []
+            rank_part = _format_change("rank", rank_from, rank_to)
+            score_part = _format_change("score", score_from, score_to)
+            if rank_part:
+                parts.append(rank_part)
+            if score_part:
+                parts.append(score_part)
+            ts = evt.get("ts", "")
+            last_change = f"{ts} ({'; '.join(parts)})"
+
+    rank_part = _format_change("rank", base_rank, latest_rank)
+    score_part = _format_change("score", base_score, latest_score)
+    seen_part = f"first_seen={str(first_seen)[:10]}" if first_seen else "first_seen=?"
+    moves_part = f"moves(rank={rank_moves},score={score_moves})"
+
+    summary_parts = [seen_part]
+    if rank_part:
+        summary_parts.append(rank_part)
+    if score_part:
+        summary_parts.append(score_part)
+    summary_parts.append(moves_part)
+    if last_change:
+        summary_parts.append(f"last_change={last_change}")
+
+    return " | ".join(summary_parts)
+
+
 def build_history_context(
-    diff_report, max_events_per_model=3, lookback_days=LOOKBACK_DAYS
+    diff_report, max_events_per_model=3, lookback_days=LOOKBACK_DAYS, max_models=12
 ):
     if not diff_report:
         return ""
-    changed = []
+    ordered_keys = []
+    key_to_label = {}
     for bucket in ("new_entries", "rank_changes", "score_changes"):
         for row in diff_report.get(bucket, []):
             source = row.get("source")
             model = row.get("model")
             if source and model:
-                changed.append((source, model))
-    if not changed:
+                key = canonical_model_key(source, model)
+                if key not in key_to_label:
+                    key_to_label[key] = (source, model)
+                    ordered_keys.append(key)
+                    if len(ordered_keys) >= max_models:
+                        break
+        if len(ordered_keys) >= max_models:
+            break
+    if not ordered_keys:
         return ""
 
     now = _utc_now()
     cutoff = now - timedelta(days=lookback_days)
     month_keys = list(_iter_month_keys(cutoff, now))
-    keys = {
-        canonical_model_key(source, model): (source, model) for source, model in changed
-    }
-    recent = {k: [] for k in keys}
+    recent = {k: [] for k in ordered_keys}
 
     for month in month_keys:
         path = _event_file_for_month(month)
@@ -312,14 +424,14 @@ def build_history_context(
         except (OSError, json.JSONDecodeError):
             continue
 
+    baselines = _safe_load_json(BASELINES_FILE, {})
     lines = []
-    for key, events in recent.items():
-        if not events:
+    for key in ordered_keys:
+        events = recent.get(key, [])
+        source, model = key_to_label[key]
+        if not events and key not in baselines:
             continue
-        source, model = keys[key]
-        lines.append(f"- {source}:{model} (last {lookback_days}d)")
-        for evt in events[-max_events_per_model:]:
-            lines.append(
-                f"  - {evt.get('ts')}: {evt.get('event_type')} {evt.get('delta')}"
-            )
+        cropped = events[-max_events_per_model:] if max_events_per_model > 0 else events
+        summary = _summarize_model_history(cropped, baselines.get(key))
+        lines.append(f"- {source}:{model} | {summary}")
     return "\n".join(lines)
