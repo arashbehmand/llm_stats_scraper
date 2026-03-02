@@ -130,11 +130,26 @@ def _load_llm_config():
     return config
 
 
-def _build_csv_context(current_state):
-    """Format top-10 models per source as CSV for the LLM prompt."""
+def _build_csv_context(current_state, diff_report=None):
+    """Format models per source as CSV for the LLM prompt.
+
+    When diff_report is provided, only includes rows for models that appear
+    in the diff (changed models + their immediate neighbours for rank context).
+    Falls back to top-10 per source if no diff is provided.
+    """
     context_lines = []
     if not current_state:
         return ""
+
+    # Build a set of (source, model) pairs that are in the diff
+    diff_models = set()
+    if diff_report:
+        for bucket in ("new_entries", "rank_changes", "score_changes"):
+            for item in diff_report.get(bucket, []):
+                source = item.get("source")
+                model = item.get("model")
+                if source and model:
+                    diff_models.add((source, model))
 
     for source, models in current_state.items():
         if not isinstance(models, list):
@@ -155,10 +170,25 @@ def _build_csv_context(current_state):
             )
         )
 
+        # When diff is available, only emit rows for changed models.
+        # Always include top-3 rows for rank anchoring context.
+        if diff_models:
+            source_diff_models = {m for (s, m) in diff_models if s == source}
+            rows_to_include = [
+                m
+                for m in valid_models
+                if m.get("model") in source_diff_models or (m.get("rank") or 99) <= 3
+            ]
+        else:
+            rows_to_include = valid_models[:20]
+
+        if not rows_to_include:
+            continue
+
         context_lines.append(f"\nSource: {source.upper()}")
         context_lines.append("Rank,Model,Score,Metrics")
 
-        for m in valid_models[:10]:
+        for m in rows_to_include:
             try:
                 score = m.get("score", 0)
                 if isinstance(score, float):
@@ -298,8 +328,15 @@ def generate_report(
     diff_report, current_state=None, langfuse_context=None, history_context=""
 ):
     """Generate a breaking-news report using LangChain and LiteLLM."""
-    if not diff_report.get("new_entries") and not diff_report.get("rank_changes"):
-        logging.info("Reporting: No significant changes to report.")
+    real_new_entries = [
+        e
+        for e in diff_report.get("new_entries", [])
+        if e.get("entry_type") != "re_entry"
+    ]
+    if not real_new_entries and not diff_report.get("rank_changes"):
+        logging.info(
+            "Reporting: Only re-entries detected, no significant changes to report."
+        )
         return None
 
     llm_config = _load_llm_config()
@@ -313,7 +350,7 @@ def generate_report(
         logging.warning("Reporting: prompt.txt not found, using fallback.")
         system_prompt = "You are an AI News Anchor. Report these changes: {changes}"
 
-    csv_context = _build_csv_context(current_state)
+    csv_context = _build_csv_context(current_state, diff_report)
     markdown_changes = _format_changes_markdown(diff_report)
     derived_signals = _build_prompt_signals(diff_report, current_state)
 

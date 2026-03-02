@@ -1,6 +1,6 @@
 import logging
 
-from logic.history_store import canonical_model_key
+from logic.history_store import BASELINES_FILE, _safe_load_json, canonical_model_key
 
 _SCORE_THRESHOLDS = {
     "arena_text": 20.0,
@@ -15,10 +15,23 @@ _SCORE_THRESHOLDS = {
 _RANK_NEWS_CUTOFF = 10
 
 
-def _check_new_entry(source, item):
-    """Build a new-entry record if the model just appeared in the top 20."""
+def _check_new_entry(source, item, baselines):
+    """Build a new-entry record if the model just appeared in the top 20.
+
+    Classifies as 're_entry' if a baseline already exists for this model,
+    indicating it previously appeared and then dropped off.
+    """
     rank = item["rank"]
-    context = f"Debuted at #{rank}"
+    canonical_key = canonical_model_key(source, item["model"])
+    existing_baseline = baselines.get(canonical_key)
+
+    if existing_baseline:
+        first_seen = str(existing_baseline.get("first_seen_at", ""))[:10]
+        entry_type = "re_entry"
+        context = f"Returned to #{rank} (previously seen {first_seen})"
+    else:
+        entry_type = "new_model"
+        context = f"Debuted at #{rank}"
 
     return {
         "source": source,
@@ -27,7 +40,7 @@ def _check_new_entry(source, item):
         "score": item["score"],
         "details": item.get("details", {}),
         "context": context,
-        "entry_type": "new_model",
+        "entry_type": entry_type,
     }
 
 
@@ -77,7 +90,7 @@ def _check_score_change(source, item, prev_item):
     }
 
 
-def _analyze_source(source, current_list, prev_list):
+def _analyze_source(source, current_list, prev_list, baselines):
     """Analyze a single source for new entries, rank changes, and score changes."""
     prev_map = {item["model"]: item for item in prev_list}
     prev_family_map = {}
@@ -97,7 +110,7 @@ def _analyze_source(source, current_list, prev_list):
             continue
 
         if model not in prev_map:
-            entry = _check_new_entry(source, item)
+            entry = _check_new_entry(source, item, baselines)
             family = canonical_model_key(source, model)
             sibling_models = [
                 m for m in prev_family_map.get(family, []) if m and m != model
@@ -160,11 +173,12 @@ def run_diff(current, previous):
         logging.info("Diff: No previous state. First run.")
         return None
 
+    baselines = _safe_load_json(BASELINES_FILE, {})
     report = {"summary": [], "new_entries": [], "rank_changes": [], "score_changes": []}
 
     for source_name, current_list in current.items():
         prev_list = previous.get(source_name, [])
-        partial = _analyze_source(source_name, current_list, prev_list)
+        partial = _analyze_source(source_name, current_list, prev_list, baselines)
         for key in report:
             report[key].extend(partial[key])
 

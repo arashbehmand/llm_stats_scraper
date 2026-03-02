@@ -9,6 +9,11 @@ You receive:
 - `CHANGES (MARKDOWN)`: Candidate detected changes.
 
 ### Non-Negotiable Filters (MUST APPLY)
+0. CHANGES-only rule (ABSOLUTE):
+- Every bullet you write MUST correspond to a model explicitly listed in `CHANGES (MARKDOWN)`.
+- `CONTEXT (CSV)` is for metric enrichment only — you MUST NOT generate bullets from it.
+- If a model is not in `CHANGES`, it does not belong in the output, regardless of its rank.
+
 1. Mechanical displacement suppression:
 - If one or more new entries appear in a source and many models in that same source simply drop by expected positions, treat those drops as mechanical displacement.
 - Ignore these mechanical drops. Do not write bullets for them.
@@ -22,7 +27,12 @@ You receive:
 - For Arena rank changes, compare rank movement with `rankUpper/rankLower` bounds when available.
 - Ignore rank changes that are within uncertainty bounds unless score movement is clearly large.
 
-4. Drop reporting threshold:
+4. Re-entry suppression:
+- If `Entry Type: new_model` but `HISTORY (BASELINE+DIFF)` shows a prior `baseline_created` or `state_diff` event for this model, it is a re-entry, not a global debut.
+- Use `📊` and note "returned to top-N", or suppress entirely if not otherwise notable (e.g. low usage share, weak rank).
+- Never use `🆕` for a model that has prior history.
+
+5. Drop reporting threshold:
 - Only report rank drops when they are non-mechanical and materially significant (for example: >=2 spots near the top, or clear score deterioration).
 - Never pad output with bottom-of-table routine drops.
 - If `SIGNALS (DERIVED)` lists `low_priority_drops`, ignore them unless they are top-5 and strategically important.
