@@ -157,6 +157,14 @@ def _prune_old_partitions(cutoff_ts):
                     continue
 
 
+def _primary_metric_key_for_source(models_list):
+    """Return the usage_metric_key of the first ranked entry in a models list."""
+    for item in models_list or []:
+        if isinstance(item, dict) and item.get("rank") is not None:
+            return item.get("details", {}).get("usage_metric_key")
+    return None
+
+
 def _build_model_map(state):
     model_map = {}
     for source, models in (state or {}).items():
@@ -215,6 +223,22 @@ def update_history(current_state, previous_state):
         _write_month_snapshot(previous_month, previous_state, now_iso)
 
     for source, models in (current_state or {}).items():
+        # If the primary ranking metric changed for this source, the previous baselines
+        # are stale — wipe them so this run creates fresh baselines.
+        prev_models = (previous_state or {}).get(source, [])
+        curr_metric = _primary_metric_key_for_source(models)
+        prev_metric = _primary_metric_key_for_source(prev_models)
+        if curr_metric and prev_metric and curr_metric != prev_metric:
+            stale_keys = [k for k in list(baselines) if k.startswith(f"{source}:")]
+            for k in stale_keys:
+                del baselines[k]
+            import logging
+
+            logging.info(
+                f"History: {source} metric changed ({prev_metric} → {curr_metric}), "
+                f"wiped {len(stale_keys)} stale baselines."
+            )
+
         for item in models or []:
             model = item.get("model")
             if not model:

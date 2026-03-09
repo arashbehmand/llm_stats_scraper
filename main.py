@@ -1,3 +1,4 @@
+import argparse
 import json
 import logging
 import os
@@ -91,9 +92,12 @@ def save_state(path, data):
     logging.info(f"State saved to {path}.")
 
 
-def report_and_publish(diff_report, current_state, trace, history_context):
+def report_and_publish(
+    diff_report, current_state, trace, history_context, dry_run=False
+):
     """Generate an LLM report and enqueue it for all configured channels.
 
+    In dry-run mode, prints the report to stdout instead of publishing.
     Always returns True — the report is durably saved to outbox before any
     delivery attempt, so state should always be updated.
     """
@@ -111,6 +115,12 @@ def report_and_publish(diff_report, current_state, trace, history_context):
         logging.info("Changes detected but deemed insignificant by reporter.")
         return True
 
+    if dry_run:
+        print("\n--- DRY RUN REPORT ---\n")
+        print(report_text)
+        print("\n--- END REPORT ---\n")
+        return True
+
     logging.info(f"Generated Report: {report_text}...")
     with _span(trace, "Publish") as pub_sp:
         publish_report(report_text)
@@ -126,11 +136,21 @@ def report_and_publish(diff_report, current_state, trace, history_context):
 
 
 def main():
-    load_dotenv()
-    logging.info("Starting LLM Stats Scraper...")
+    parser = argparse.ArgumentParser(description="LLM Stats Scraper")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run everything but print report to stdout instead of publishing. State is not persisted.",
+    )
+    args = parser.parse_args()
+    dry_run = args.dry_run
 
-    # Retry any messages that failed to deliver in the previous run
-    drain_all_outboxes()
+    load_dotenv()
+    logging.info("Starting LLM Stats Scraper%s...", " (dry-run)" if dry_run else "")
+
+    if not dry_run:
+        # Retry any messages that failed to deliver in the previous run
+        drain_all_outboxes()
 
     langfuse = initialize_langfuse()
     trace = langfuse.trace(name="LLM Stats Scraper Run") if langfuse else None
@@ -143,14 +163,16 @@ def main():
 
     if not previous_state:
         logging.info("First run detected. Saving state and exiting.")
-        update_history(current_state, {})
-        save_state(STATE_FILE, current_state)
+        if not dry_run:
+            update_history(current_state, {})
+            save_state(STATE_FILE, current_state)
         return
 
     # 3. Detect changes
     with _span(trace, "Diff Calculation") as diff_sp:
         diff_report = run_diff(current_state, previous_state)
-        update_history(current_state, previous_state)
+        if not dry_run:
+            update_history(current_state, previous_state)
         history_context = build_history_context(diff_report)
         has_changes = bool(
             diff_report.get("new_entries") or diff_report.get("rank_changes")
@@ -168,18 +190,16 @@ def main():
     # 4. Report, publish & persist state
     if has_changes:
         should_update = report_and_publish(
-            diff_report, current_state, trace, history_context
+            diff_report, current_state, trace, history_context, dry_run=dry_run
         )
     else:
         logging.info("No significant changes detected.")
         should_update = True
 
-    if should_update:
+    if not dry_run and should_update:
         save_state(STATE_FILE, current_state)
-    else:
-        logging.warning(
-            f"State NOT updated — retaining previous {STATE_FILE} for retry."
-        )
+    elif dry_run:
+        logging.info("Dry-run: state not persisted.")
 
 
 if __name__ == "__main__":

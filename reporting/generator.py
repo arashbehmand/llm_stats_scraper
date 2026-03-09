@@ -31,7 +31,13 @@ METRIC_CANDIDATE_KEYS = [
     "provider_count",
     "request_count",
     "usage_share_pct",
+    "current_week_share_pct",
     "usage_metric_key",
+    # new-listing metadata
+    "is_new_listing",
+    "created_at",
+    "context_length",
+    "supports_reasoning",
 ]
 
 
@@ -155,14 +161,18 @@ def _build_csv_context(current_state, diff_report=None):
         if not isinstance(models, list):
             continue
 
-        valid_models = [m for m in models if isinstance(m, dict)]
-        if not valid_models:
-            continue
+        # Exclude rank=None entries from the chart; they only appear if in the diff.
+        ranked_models = [
+            m for m in models if isinstance(m, dict) and m.get("rank") is not None
+        ]
+        unranked_diff_models = [
+            m for m in models if isinstance(m, dict) and m.get("rank") is None
+        ]
 
-        valid_models.sort(
+        ranked_models.sort(
             key=lambda row: (
                 (
-                    row.get("rank")
+                    row["rank"]
                     if isinstance(row.get("rank"), (int, float))
                     else float("inf")
                 ),
@@ -170,17 +180,22 @@ def _build_csv_context(current_state, diff_report=None):
             )
         )
 
+        diff_model_names = {m for (s, m) in diff_models if s == source}
+
         # When diff is available, only emit rows for changed models.
-        # Always include top-3 rows for rank anchoring context.
+        # Always include top-3 ranked rows for rank anchoring context.
         if diff_models:
-            source_diff_models = {m for (s, m) in diff_models if s == source}
             rows_to_include = [
                 m
-                for m in valid_models
-                if m.get("model") in source_diff_models or (m.get("rank") or 99) <= 3
+                for m in ranked_models
+                if m.get("model") in diff_model_names or m["rank"] <= 3
+            ]
+            # Append unranked entries that appear in the diff (e.g. new listings)
+            rows_to_include += [
+                m for m in unranked_diff_models if m.get("model") in diff_model_names
             ]
         else:
-            rows_to_include = valid_models[:20]
+            rows_to_include = ranked_models[:20]
 
         if not rows_to_include:
             continue
