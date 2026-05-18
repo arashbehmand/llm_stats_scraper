@@ -29,10 +29,6 @@ METRIC_CANDIDATE_KEYS = [
     "p50_latency",
     "p50_throughput",
     "provider_count",
-    "request_count",
-    "usage_share_pct",
-    "current_week_share_pct",
-    "usage_metric_key",
     # new-listing metadata
     "is_new_listing",
     "created_at",
@@ -312,29 +308,18 @@ def _build_prompt_signals(diff_report, current_state):
     else:
         lines.append("- low_priority_drops: none")
 
-    openrouter_rows = (current_state or {}).get("openrouter", [])
-    if isinstance(openrouter_rows, list) and openrouter_rows:
-        ranked = [row for row in openrouter_rows if isinstance(row, dict)]
-        ranked.sort(
-            key=lambda row: (
-                -float(row.get("details", {}).get("usage_value", 0.0)),
-                str(row.get("model", "")),
-            )
+    openrouter_new_models = [
+        entry.get("model", "unknown")
+        for entry in new_entries
+        if entry.get("source") == "openrouter_new"
+        and entry.get("details", {}).get("is_new_listing")
+    ]
+    if openrouter_new_models:
+        lines.append(
+            "- openrouter_new_listings: " + ", ".join(openrouter_new_models[:10])
         )
-        top = ranked[0] if ranked else None
-        if top:
-            model = top.get("model", "unknown")
-            usage_share = top.get("details", {}).get(
-                "usage_share_pct", top.get("score")
-            )
-            usage_value = top.get("details", {}).get("usage_value", "?")
-            rank = _to_int(top.get("rank"), 0)
-            lines.append(
-                f"- openrouter_top_by_usage: {model} "
-                f"(rank={rank}, usage_share_pct={usage_share}, usage_value={usage_value})"
-            )
     else:
-        lines.append("- openrouter_top_by_usage: unavailable")
+        lines.append("- openrouter_new_listings: none")
 
     return "\n".join(lines)
 

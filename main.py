@@ -2,6 +2,7 @@ import argparse
 import json
 import logging
 import os
+import sys
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
@@ -30,8 +31,25 @@ SCRAPERS = [
     ("vellum", scrape_vellum, ()),
     ("artificial_analysis", scrape_artificial_analysis, ()),
     ("llmstats", scrape_llmstats, ()),
-    ("openrouter", scrape_openrouter, ()),
+    ("openrouter_new", scrape_openrouter, ()),
 ]
+
+
+def _safe_print(text=""):
+    """Print text without crashing on Windows consoles with narrow encodings."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        if hasattr(sys.stdout, "reconfigure"):
+            try:
+                sys.stdout.reconfigure(encoding="utf-8")
+                print(text)
+                return
+            except Exception:
+                pass
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe_text = str(text).encode(encoding, errors="replace").decode(encoding)
+        print(safe_text)
 
 
 # ---------------------------------------------------------------------------
@@ -116,9 +134,9 @@ def report_and_publish(
         return True
 
     if dry_run:
-        print("\n--- DRY RUN REPORT ---\n")
-        print(report_text)
-        print("\n--- END REPORT ---\n")
+        _safe_print("\n--- DRY RUN REPORT ---\n")
+        _safe_print(report_text)
+        _safe_print("\n--- END REPORT ---\n")
         return True
 
     logging.info(f"Generated Report: {report_text}...")

@@ -12,16 +12,17 @@ HEADERS = {
     "RSC": "1",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 }
+SCORE_KEY = "intelligenceIndex"
 
 
 def find_leaderboard_data(obj):
     """
     Recursively search for a list of objects that looks like the leaderboard data.
-    We identify it by the presence of 'intelligence_index' key in the objects.
+    We identify it by the current Artificial Analysis intelligence score key.
     """
     if isinstance(obj, list):
         # Check if list elements look like the leaderboard rows
-        if len(obj) > 0 and isinstance(obj[0], dict) and "intelligence_index" in obj[0]:
+        if len(obj) > 0 and isinstance(obj[0], dict) and SCORE_KEY in obj[0]:
             return obj
         for item in obj:
             res = find_leaderboard_data(item)
@@ -53,7 +54,7 @@ def scrape_artificial_analysis():
     all_data = []
 
     for line in lines:
-        if "intelligence_index" in line:
+        if SCORE_KEY in line:
             try:
                 parts = line.split(":", 1)
                 if len(parts) < 2:
@@ -84,12 +85,11 @@ def scrape_artificial_analysis():
     logging.info(f"Artificial Analysis: Extracted {len(all_data)} raw models.")
 
     normalized = []
-    # Rank models based on intelligence_index descending
-    # Ensure intelligence_index is numeric
+    # Rank models based on Artificial Analysis' current intelligence score.
     valid_entries = []
     for entry in all_data:
         try:
-            score = float(entry.get("intelligence_index", 0))
+            score = float(entry.get(SCORE_KEY))
             valid_entries.append((entry, score))
         except (ValueError, TypeError):
             continue
@@ -100,9 +100,10 @@ def scrape_artificial_analysis():
     for rank, (entry, score) in enumerate(valid_entries, 1):
         normalized.append(
             {
-                "model": entry.get(
-                    "name", "Unknown"
-                ),  # Assuming 'name' field exists, fallback required if different
+                "model": entry.get("name")
+                or entry.get("shortName")
+                or entry.get("slug")
+                or "Unknown",
                 "rank": rank,
                 "score": score,
                 "source": "artificial_analysis",

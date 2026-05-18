@@ -1,14 +1,14 @@
 from reporting.generator import _build_prompt_signals
 
 
-def test_build_prompt_signals_uses_usage_order_and_mechanical_hints():
+def test_build_prompt_signals_uses_mechanical_hints_without_openrouter_usage():
     diff_report = {
         "new_entries": [
-            {"source": "openrouter", "model": "New Top", "rank": 1},
+            {"source": "arena_text", "model": "New Top", "rank": 1},
         ],
         "rank_changes": [
             {
-                "source": "openrouter",
+                "source": "arena_text",
                 "model": "Old Top",
                 "old_rank": 1,
                 "new_rank": 2,
@@ -17,23 +17,39 @@ def test_build_prompt_signals_uses_usage_order_and_mechanical_hints():
         ],
         "score_changes": [],
     }
+    current_state = {"arena_text": []}
+
+    signals = _build_prompt_signals(diff_report, current_state)
+
+    assert "mechanical_drop_candidates: arena_text:Old Top" in signals
+    assert "openrouter_top_by_usage" not in signals
+
+
+def test_build_prompt_signals_lists_openrouter_new_listings():
+    diff_report = {
+        "new_entries": [
+            {
+                "source": "openrouter_new",
+                "model": "Fresh Model",
+                "rank": None,
+                "details": {"is_new_listing": True},
+            }
+        ],
+        "rank_changes": [],
+        "score_changes": [],
+    }
     current_state = {
-        "openrouter": [
+        "openrouter_new": [
             {
-                "model": "Low Usage",
-                "rank": 1,
-                "score": 0.04,
-                "details": {"usage_value": 100, "usage_share_pct": 0.04},
-            },
-            {
-                "model": "High Usage",
-                "rank": 2,
-                "score": 0.9,
-                "details": {"usage_value": 1000, "usage_share_pct": 0.9},
-            },
+                "model": "Fresh Model",
+                "rank": None,
+                "score": 0.0,
+                "details": {"is_new_listing": True},
+            }
         ]
     }
 
     signals = _build_prompt_signals(diff_report, current_state)
-    assert "mechanical_drop_candidates: openrouter:Old Top" in signals
-    assert "openrouter_top_by_usage: High Usage" in signals
+
+    assert "openrouter_new_listings: Fresh Model" in signals
+    assert "openrouter_top_by_usage" not in signals

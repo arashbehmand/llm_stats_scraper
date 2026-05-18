@@ -1,6 +1,6 @@
 # LLM Stats Scraper Bot
 
-A Dockerized Python application that monitors major LLM leaderboards (LMSYS Arena, Vellum, Artificial Analysis, LLMStats), detects significant market movements (new models, rank changes), and publishes AI-generated reports to a Telegram channel.
+A Dockerized Python application that monitors major LLM leaderboards and OpenRouter model listings, detects significant market movements (new models, rank changes), and publishes AI-generated reports to a Telegram channel.
 
 ## About This Project
 
@@ -8,17 +8,17 @@ This project addresses the challenge of staying current with the rapidly evolvin
 
 ### Problem & Solution
 
-**The Challenge:** AI practitioners, researchers, and enthusiasts need to track model performance across multiple leaderboards (LMSYS Arena, Vellum, Artificial Analysis, LLMStats, OpenRouter), but each platform has different formats, update schedules, and ranking methodologies.
+**The Challenge:** AI practitioners, researchers, and enthusiasts need to track model performance across multiple leaderboards (LMSYS Arena, Vellum, Artificial Analysis, LLMStats) and new model availability on OpenRouter, but each platform has different formats, update schedules, and ranking methodologies.
 
 **The Solution:** An automated system that:
-- Scrapes 5 major leaderboards hourly using adaptive parsing techniques (handling both static APIs and dynamic RSC-based endpoints)
+- Scrapes major leaderboard and model-catalog sources hourly using adaptive parsing techniques
 - Applies intelligent diff logic to filter noise and identify meaningful changes (new model entries, significant rank movements, score anomalies)
 - Generates human-readable "breaking news" reports using LLM-powered summarization
 - Delivers updates instantly via Telegram with robust error handling and fallback mechanisms
 
 ### Technical Highlights
 
-- **Resilient Scraping:** Handles diverse data sources including REST APIs, RSC (React Server Components) payloads, and structured JSON endpoints
+- **Resilient Scraping:** Handles diverse data sources including REST APIs, static Next payloads, and structured JSON endpoints
 - **Smart Change Detection:** Custom diff engine that distinguishes between signal (new top-10 model) and noise (minor score fluctuations)
 - **Production-Grade Reliability:** Retry logic, state persistence, HTML/plain-text fallback for messages, and containerized deployment
 - **LLM Observability:** Optional Langfuse integration for tracing report generation, latency monitoring, and cost analysis
@@ -44,12 +44,12 @@ This project demonstrates end-to-end development of a production-ready data pipe
 
 ## Features
 
-- **Multi-Source Scraping**: Monitors 5 major leaderboards:
+- **Multi-Source Scraping**: Monitors major leaderboard and catalog sources:
     - [LMSYS Chatbot Arena](https://chat.lmsys.org/) (Text, Vision & Code)
     - [Vellum](https://www.vellum.ai/llm-leaderboard)
     - [Artificial Analysis](https://artificialanalysis.ai/)
     - [LLMStats](https://llm-stats.com/) (via ZeroEval API)
-    - [OpenRouter](https://openrouter.ai/rankings) (Weekly rankings)
+    - [OpenRouter](https://openrouter.ai/models) (new model listings only)
 - **Smart Diff Engine**: Detects meaningful changes (new entrants, significant rank swaps, score spikes) while filtering out noise.
 - **Variant-Aware Change Detection**: Distinguishes likely model variants (e.g., thinking/high modes) from fully new families.
 - **Cascade Drop Suppression**: Avoids reporting obvious downstream rank drops caused only by newly inserted models above.

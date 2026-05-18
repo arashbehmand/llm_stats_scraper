@@ -1,0 +1,39 @@
+[MASTER]
+ignore=.venv, docs, data, _old
+init-hook='import os, sys; sys.path.insert(0, os.getcwd())'
+
+[MESSAGES CONTROL]
+disable=
+    C0114,  ; missing-module-docstring
+    C0115,  ; missing-class-docstring
+    C0116,  ; missing-function-docstring
+    C0301,  ; line-too-long
+    R0914,  ; too many local variables
+    R0912,  ; too many branches
+    R0915,  ; too many statements
+    R0913,  ; too many arguments
+    R0917,  ; too many positional arguments
+    R0903,  ; too few public methods
+    W1203,  ; use lazy % formatting in logging functions
+    W0702,  ; bare-except (allowed in this project)
+    W0707,  ; consider explicitly re-raising with "from" keyword
+    W0718,  ; catching too general exception
+    W1514,  ; open without explicit encoding
+    W0621,  ; redefined-outer-name
+    W3101,  ; requests missing timeout
+    W0612,  ; unused-variable
+    W0640,  ; cell-var-from-loop
+    R0401,  ; cyclic import
+    R1702,  ; too-many-nested-blocks
+    R1705,  ; no-else-return
+    R1710,  ; inconsistent-return-statements
+    ; R0801,  ; duplicate code/similar lines
+    C0415,  ; import outside toplevel
+    ; E1133,  ; non-iterable used in iterating context
+    C0411   ; wrong-import-order
+[FORMAT]
+max-line-length=100
+
+[TYPECHECK]
+# (No ignore-missing-imports option here)
+generated-members=trace

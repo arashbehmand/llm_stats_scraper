@@ -1,0 +1,10 @@
+exclude = [
+    ".venv",
+    "_old",
+    "state",
+]
+
+[lint]
+ignore = [
+    "E722", # allow bare except in this project
+]
